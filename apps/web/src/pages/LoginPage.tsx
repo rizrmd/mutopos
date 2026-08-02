@@ -53,43 +53,31 @@ export function LoginPage() {
   }
 
   return (
-    <div className="relative flex min-h-svh items-center justify-center overflow-hidden bg-background p-4">
-      {/* Soft daytime wash behind the card */}
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-0 opacity-70"
-        style={{
-          background:
-            'radial-gradient(ellipse 60% 50% at 20% 20%, var(--pastel-3), transparent), radial-gradient(ellipse 50% 40% at 80% 30%, var(--pastel-8), transparent), radial-gradient(ellipse 40% 50% at 50% 90%, var(--pastel-1), transparent)',
-        }}
-      />
-
-      <Card className="relative w-full max-w-md rounded-2xl border-border/80 shadow-lg shadow-foreground/5">
-        <CardHeader className="space-y-3">
+    <div className="flex min-h-svh items-center justify-center bg-background p-4">
+      <Card className="w-full max-w-md">
+        <CardHeader className="space-y-3 p-5">
           <div className="flex items-center gap-3">
-            <div className="flex size-11 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-sm">
+            <div className="flex size-10 items-center justify-center bg-primary text-primary-foreground">
               <Smartphone className="size-5" />
             </div>
             <div>
-              <div className="text-lg font-semibold tracking-tight">
-                Muto<span className="font-normal text-muted-foreground"> POS</span>
-              </div>
+              <div className="text-base font-bold">MutoPOS</div>
               <div className="text-xs text-muted-foreground">
-                A modern way to run hospitality from front to back
+                Sign in with phone OTP
               </div>
             </div>
           </div>
-          <CardTitle className="text-xl">Sign in</CardTitle>
+          <CardTitle className="text-lg">Sign in</CardTitle>
           <CardDescription>
-            WhatsApp OTP stub — enter E.164 phone. In development the code is
-            returned in the response (default <code>000000</code>).
+            E.164 phone. Dev stub code is returned in the response (default{' '}
+            <code className="bg-muted px-1">000000</code>).
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="space-y-4 p-5 pt-0">
           {step === 'phone' ? (
             <>
-              <div className="space-y-2">
-                <label className="text-sm font-medium" htmlFor="phone">
+              <div className="space-y-1.5">
+                <label className="text-sm font-semibold" htmlFor="phone">
                   Phone (E.164)
                 </label>
                 <Input
@@ -98,11 +86,11 @@ export function LoginPage() {
                   onChange={(e) => setPhone(e.target.value)}
                   placeholder="+6281234567890"
                   autoComplete="tel"
-                  className="h-11 rounded-xl"
+                  className="h-10"
                 />
               </div>
-              <div className="space-y-2">
-                <label className="text-sm font-medium" htmlFor="name">
+              <div className="space-y-1.5">
+                <label className="text-sm font-semibold" htmlFor="name">
                   Display name (optional)
                 </label>
                 <Input
@@ -110,11 +98,11 @@ export function LoginPage() {
                   value={displayName}
                   onChange={(e) => setDisplayName(e.target.value)}
                   placeholder="Owner name"
-                  className="h-11 rounded-xl"
+                  className="h-10"
                 />
               </div>
               <Button
-                className="h-11 w-full rounded-xl text-sm font-semibold"
+                className="h-10 w-full font-semibold"
                 type="button"
                 disabled={busy || phone.length < 8}
                 onClick={() => void onRequest()}
@@ -125,19 +113,17 @@ export function LoginPage() {
           ) : (
             <>
               <p className="text-sm text-muted-foreground">
-                Code sent to <strong>{phone}</strong>
+                Code sent to <strong className="text-foreground">{phone}</strong>
                 {devCode ? (
                   <>
                     {' '}
-                    · stub code{' '}
-                    <code className="rounded-md bg-muted px-1.5 py-0.5">
-                      {devCode}
-                    </code>
+                    · stub{' '}
+                    <code className="bg-muted px-1 font-semibold">{devCode}</code>
                   </>
                 ) : null}
               </p>
-              <div className="space-y-2">
-                <label className="text-sm font-medium" htmlFor="code">
+              <div className="space-y-1.5">
+                <label className="text-sm font-semibold" htmlFor="code">
                   OTP code
                 </label>
                 <Input
@@ -146,14 +132,14 @@ export function LoginPage() {
                   onChange={(e) => setCode(e.target.value)}
                   placeholder="000000"
                   inputMode="numeric"
-                  className="h-11 rounded-xl tracking-widest"
+                  className="h-10 tracking-widest"
                 />
               </div>
               <div className="flex gap-2">
                 <Button
                   type="button"
                   variant="outline"
-                  className="h-11 flex-1 rounded-xl"
+                  className="h-10 flex-1"
                   disabled={busy}
                   onClick={() => setStep('phone')}
                 >
@@ -161,7 +147,7 @@ export function LoginPage() {
                 </Button>
                 <Button
                   type="button"
-                  className="h-11 flex-1 rounded-xl font-semibold"
+                  className="h-10 flex-1 font-semibold"
                   disabled={busy || !code}
                   onClick={() => void onVerify()}
                 >
@@ -171,7 +157,7 @@ export function LoginPage() {
             </>
           )}
           {error ? (
-            <p className="text-sm text-destructive" role="alert">
+            <p className="text-sm font-medium text-destructive" role="alert">
               {error}
             </p>
           ) : null}

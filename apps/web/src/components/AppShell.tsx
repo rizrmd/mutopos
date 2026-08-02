@@ -6,11 +6,8 @@ import {
   Receipt,
   Search,
   ShoppingCart,
-  Wifi,
-  WifiOff,
 } from 'lucide-react'
 
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { subscribeOutbox, type OutboxStats } from '@/lib/outbox'
@@ -29,15 +26,6 @@ function initials(name: string | null | undefined, fallback = '?') {
   if (parts.length === 1) return parts[0].slice(0, 1).toUpperCase()
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
 }
-
-const avatarTints = [
-  'bg-sky-100 text-sky-800',
-  'bg-violet-100 text-violet-800',
-  'bg-amber-100 text-amber-900',
-  'bg-rose-100 text-rose-800',
-  'bg-emerald-100 text-emerald-800',
-  'bg-orange-100 text-orange-900',
-]
 
 export function AppShell() {
   const {
@@ -68,47 +56,39 @@ export function AppShell() {
   )
 
   const activeStaff = staff.find((s) => s.id === staffId)
-  const clockLabel = useMemo(() => {
-    const d = new Date()
-    return d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
-  }, [location.pathname])
-
   const isPos = location.pathname === '/'
+  const pending = stats?.pending ?? 0
 
   return (
     <div className="flex h-svh overflow-hidden bg-background text-foreground">
-      {/* Left sidebar — Vita menus rail */}
+      {/* Left sidebar */}
       <aside
         className={cn(
-          'flex shrink-0 flex-col border-r border-border bg-sidebar transition-[width] duration-200',
-          sidebarOpen ? 'w-[15.5rem]' : 'w-0 overflow-hidden border-r-0',
+          'flex shrink-0 flex-col border-r border-border bg-card transition-[width] duration-150',
+          sidebarOpen ? 'w-56' : 'w-0 overflow-hidden border-r-0',
         )}
       >
-        <div className="flex items-start gap-2 border-b border-border px-4 py-4">
+        <div className="flex items-center gap-2 border-b border-border px-3 py-3">
           <button
             type="button"
-            className="mt-0.5 rounded-md p-1 text-muted-foreground hover:bg-muted"
+            className="p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
             onClick={() => setSidebarOpen(false)}
             aria-label="Collapse sidebar"
           >
             <Menu className="size-4" />
           </button>
-          <div className="min-w-0">
-            <div className="truncate text-sm font-semibold tracking-tight">
-              {businessName}
-            </div>
-            <div className="text-xs text-muted-foreground">Inventory · POS</div>
+          <div className="min-w-0 truncate text-sm font-semibold">
+            {businessName}
           </div>
         </div>
 
-        <div className="border-b border-border px-3 py-3 space-y-2">
-          <label className="block text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-            Business
-          </label>
+        {/* Compact context selectors — square, high contrast */}
+        <div className="space-y-2 border-b border-border p-3">
           <select
-            className="h-9 w-full rounded-lg border border-border bg-card px-2 text-sm"
+            className="h-9 w-full border border-border bg-background px-2 text-sm font-medium text-foreground"
             value={businessId ?? ''}
             onChange={(e) => setBusinessId(e.target.value)}
+            aria-label="Business"
           >
             {memberships.map((m) => (
               <option key={m.business_id} value={m.business_id}>
@@ -116,16 +96,14 @@ export function AppShell() {
               </option>
             ))}
           </select>
-          <label className="block text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-            Outlet
-          </label>
           <select
-            className="h-9 w-full rounded-lg border border-border bg-card px-2 text-sm"
+            className="h-9 w-full border border-border bg-background px-2 text-sm font-medium text-foreground"
             value={outletId ?? ''}
             onChange={(e) => setOutletId(e.target.value)}
+            aria-label="Outlet"
           >
             <option value="" disabled>
-              Select outlet
+              Outlet…
             </option>
             {outlets.map((o) => (
               <option key={o.id} value={o.id}>
@@ -135,14 +113,7 @@ export function AppShell() {
           </select>
         </div>
 
-        <div className="flex items-center justify-between px-4 py-3">
-          <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            Menus
-          </span>
-          <span className="text-xs text-muted-foreground">{nav.length} areas</span>
-        </div>
-
-        <nav className="flex-1 space-y-1 overflow-y-auto px-2 pos-scroll">
+        <nav className="flex-1 space-y-0.5 overflow-y-auto p-2 pos-scroll">
           {nav.map(({ to, label, icon: Icon, end }) => (
             <NavLink
               key={to}
@@ -150,70 +121,34 @@ export function AppShell() {
               end={end}
               className={({ isActive }) =>
                 cn(
-                  'flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors',
+                  'flex items-center gap-2 px-3 py-2.5 text-sm font-medium transition-colors',
                   isActive
-                    ? 'bg-emerald-50 text-emerald-900 ring-1 ring-emerald-100'
-                    : 'text-sidebar-foreground/80 hover:bg-muted',
+                    ? 'bg-foreground text-background'
+                    : 'text-foreground/80 hover:bg-muted hover:text-foreground',
                 )
               }
             >
-              <span
-                className={cn(
-                  'flex size-8 items-center justify-center rounded-lg text-xs font-semibold',
-                  to === '/'
-                    ? 'bg-emerald-100 text-emerald-800'
-                    : to === '/catalog'
-                      ? 'bg-violet-100 text-violet-800'
-                      : 'bg-sky-100 text-sky-800',
-                )}
-              >
-                <Icon className="size-3.5" />
-              </span>
-              <span className="flex-1">{label}</span>
-              {to === '/' ? (
-                <span className="flex items-center gap-1 text-[10px] font-medium text-emerald-700">
-                  <span className="size-1.5 rounded-full bg-emerald-500" />
-                  Online
-                </span>
-              ) : null}
+              <Icon className="size-4 shrink-0" />
+              {label}
             </NavLink>
           ))}
         </nav>
 
-        <div className="mt-auto border-t border-border px-4 py-4">
-          <div className="text-sm font-semibold tracking-tight">
-            Muto<span className="font-normal text-muted-foreground"> POS</span>
-          </div>
-          <p className="mt-1 text-[11px] leading-snug text-muted-foreground">
-            Offline-first hospitality POS · RxDB outbox
-          </p>
-          <div className="mt-3 flex items-center gap-2">
-            {(stats?.pending ?? 0) > 0 ? (
-              <Badge variant="warning" className="text-[10px]">
-                Outbox {stats?.pending}
-              </Badge>
-            ) : (
-              <Badge variant="secondary" className="text-[10px]">
-                Outbox clear
-              </Badge>
-            )}
-            {stats?.online ? (
-              <Badge variant="success" className="gap-1 text-[10px]">
-                <Wifi className="size-3" /> Live
-              </Badge>
-            ) : (
-              <Badge variant="warning" className="gap-1 text-[10px]">
-                <WifiOff className="size-3" /> Offline
-              </Badge>
-            )}
-          </div>
+        <div className="border-t border-border px-3 py-3">
+          <div className="text-sm font-semibold">MutoPOS</div>
+          {pending > 0 ? (
+            <p className="mt-1 text-xs font-medium text-amber-800">
+              Syncing {pending} change{pending === 1 ? '' : 's'}…
+            </p>
+          ) : (
+            <p className="mt-1 text-xs text-muted-foreground">Synced</p>
+          )}
         </div>
       </aside>
 
-      {/* Main column */}
+      {/* Main */}
       <div className="flex min-w-0 flex-1 flex-col">
-        {/* Top bar */}
-        <header className="flex h-14 shrink-0 items-center gap-3 border-b border-border bg-card/80 px-4 backdrop-blur">
+        <header className="flex h-12 shrink-0 items-center gap-3 border-b border-border bg-card px-3">
           {!sidebarOpen ? (
             <Button
               type="button"
@@ -229,16 +164,17 @@ export function AppShell() {
 
           <div className="min-w-0">
             <div className="truncate text-sm font-semibold">
-              {isPos ? 'À la carte' : location.pathname === '/catalog' ? 'Catalog' : 'Receipts'}
-            </div>
-            <div className="text-[11px] text-muted-foreground">
-              {isPos ? 'Items · tap to order' : 'Manage your business'}
+              {isPos
+                ? 'Menu'
+                : location.pathname.startsWith('/catalog')
+                  ? 'Catalog'
+                  : 'Receipts'}
             </div>
           </div>
 
-          {/* Staff chips */}
-          <div className="ml-2 hidden min-w-0 flex-1 items-center gap-1.5 overflow-x-auto md:flex pos-scroll">
-            {staff.map((s, i) => {
+          {/* Staff picker — flat chips */}
+          <div className="ml-2 hidden min-w-0 flex-1 items-center gap-1 overflow-x-auto md:flex pos-scroll">
+            {staff.map((s) => {
               const active = s.id === staffId
               return (
                 <button
@@ -246,16 +182,18 @@ export function AppShell() {
                   type="button"
                   onClick={() => setStaffId(s.id)}
                   className={cn(
-                    'inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2 py-1 text-xs font-medium transition-colors',
+                    'inline-flex shrink-0 items-center gap-1.5 border px-2 py-1 text-xs font-medium transition-colors',
                     active
-                      ? 'border-violet-200 bg-violet-50 text-violet-900'
-                      : 'border-transparent bg-muted/80 text-muted-foreground hover:bg-muted',
+                      ? 'border-foreground bg-foreground text-background'
+                      : 'border-border bg-card text-foreground hover:bg-muted',
                   )}
                 >
                   <span
                     className={cn(
-                      'flex size-5 items-center justify-center rounded-full text-[10px] font-semibold',
-                      avatarTints[i % avatarTints.length],
+                      'flex size-5 items-center justify-center text-[10px] font-bold',
+                      active
+                        ? 'bg-background text-foreground'
+                        : 'bg-muted text-foreground',
                     )}
                   >
                     {initials(s.display_name)}
@@ -264,26 +202,22 @@ export function AppShell() {
                 </button>
               )
             })}
-            {staff.length === 0 ? (
-              <span className="text-xs text-muted-foreground">No staff yet</span>
-            ) : null}
           </div>
 
           <div className="ml-auto flex items-center gap-2">
             {isPos ? (
               <div className="relative hidden sm:block">
-                <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+                <Search className="pointer-events-none absolute left-2 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
                 <Input
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  placeholder="Search items…"
-                  className="h-9 w-44 rounded-full border-border bg-muted/50 pl-8 text-sm lg:w-56"
-                  data-pos-search
+                  placeholder="Search…"
+                  className="h-8 w-40 border-border bg-background pl-7 text-sm lg:w-52"
                 />
               </div>
             ) : null}
 
-            <div className="hidden items-center gap-2 rounded-full border border-border bg-card px-2.5 py-1 sm:flex">
+            <div className="hidden items-center gap-2 border border-border bg-background px-2 py-1 sm:flex">
               <div className="text-right leading-tight">
                 <div className="text-xs font-semibold">
                   {activeStaff?.display_name ??
@@ -291,11 +225,8 @@ export function AppShell() {
                     user?.phone_e164 ??
                     'Staff'}
                 </div>
-                <div className="text-[10px] text-muted-foreground">
-                  Clocked in {clockLabel}
-                </div>
               </div>
-              <span className="flex size-8 items-center justify-center rounded-full bg-violet-100 text-xs font-semibold text-violet-800">
+              <span className="flex size-7 items-center justify-center bg-foreground text-[10px] font-bold text-background">
                 {initials(
                   activeStaff?.display_name ?? user?.display_name,
                   'U',
@@ -307,7 +238,7 @@ export function AppShell() {
               type="button"
               size="sm"
               variant="ghost"
-              className="text-muted-foreground"
+              className="h-8 text-muted-foreground"
               onClick={() => void logout()}
             >
               Sign out
@@ -315,11 +246,10 @@ export function AppShell() {
           </div>
         </header>
 
-        {/* Page body — full height for POS */}
         <main
           className={cn(
             'min-h-0 flex-1',
-            isPos ? 'overflow-hidden' : 'overflow-y-auto pos-scroll p-4 md:p-6',
+            isPos ? 'overflow-hidden' : 'overflow-y-auto pos-scroll p-4 md:p-5',
           )}
         >
           <Outlet context={{ search, setSearch }} />

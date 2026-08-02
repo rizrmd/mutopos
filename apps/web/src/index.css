@@ -23,77 +23,90 @@
   --color-sidebar: var(--sidebar);
   --color-sidebar-foreground: var(--sidebar-foreground);
   --color-ticket: var(--ticket);
-  --radius-sm: calc(var(--radius) - 4px);
-  --radius-md: calc(var(--radius) - 2px);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) + 4px);
-  --radius-2xl: calc(var(--radius) + 8px);
+  /* Square UI — no soft radius scale */
+  --radius-sm: 0;
+  --radius-md: 0;
+  --radius-lg: 0;
+  --radius-xl: 0;
+  --radius-2xl: 0;
+  --radius-3xl: 0;
 }
 
-/* Vita POS daytime mode — soft greys, pastel surfaces, teal primary */
+/*
+  High-contrast POS shell
+  - Square corners (--radius: 0)
+  - Darker text, stronger borders
+  - Category tiles use mid-tone fills (not washed pastels)
+*/
 :root {
-  --radius: 0.75rem;
-  --background: oklch(0.965 0.008 260);
-  --foreground: oklch(0.28 0.02 265);
+  --radius: 0;
+  --background: oklch(0.97 0.004 260);
+  --foreground: oklch(0.18 0.02 265);
   --card: oklch(1 0 0);
-  --card-foreground: oklch(0.28 0.02 265);
+  --card-foreground: oklch(0.18 0.02 265);
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.28 0.02 265);
-  --primary: oklch(0.62 0.14 165);
+  --popover-foreground: oklch(0.18 0.02 265);
+  /* Strong teal primary */
+  --primary: oklch(0.48 0.12 165);
   --primary-foreground: oklch(0.99 0 0);
-  --secondary: oklch(0.96 0.012 265);
-  --secondary-foreground: oklch(0.32 0.03 265);
-  --muted: oklch(0.955 0.01 265);
-  --muted-foreground: oklch(0.52 0.02 265);
-  --accent: oklch(0.94 0.03 165);
-  --accent-foreground: oklch(0.32 0.08 165);
-  --destructive: oklch(0.55 0.2 25);
+  --secondary: oklch(0.94 0.01 265);
+  --secondary-foreground: oklch(0.22 0.02 265);
+  --muted: oklch(0.94 0.008 265);
+  --muted-foreground: oklch(0.38 0.02 265);
+  --accent: oklch(0.92 0.04 165);
+  --accent-foreground: oklch(0.22 0.08 165);
+  --destructive: oklch(0.5 0.2 25);
   --destructive-foreground: oklch(0.99 0 0);
-  --border: oklch(0.91 0.012 265);
-  --input: oklch(0.91 0.012 265);
-  --ring: oklch(0.62 0.14 165);
-  --sidebar: oklch(0.99 0.004 265);
-  --sidebar-foreground: oklch(0.32 0.02 265);
-  --ticket: oklch(0.995 0.004 265);
+  --border: oklch(0.82 0.015 265);
+  --input: oklch(0.82 0.015 265);
+  --ring: oklch(0.48 0.12 165);
+  --sidebar: oklch(1 0 0);
+  --sidebar-foreground: oklch(0.2 0.02 265);
+  --ticket: oklch(1 0 0);
 }
 
 .dark {
-  --background: oklch(0.18 0.02 265);
+  --background: oklch(0.16 0.02 265);
   --foreground: oklch(0.96 0.01 95);
-  --card: oklch(0.22 0.02 265);
+  --card: oklch(0.2 0.02 265);
   --card-foreground: oklch(0.96 0.01 95);
-  --popover: oklch(0.22 0.02 265);
+  --popover: oklch(0.2 0.02 265);
   --popover-foreground: oklch(0.96 0.01 95);
-  --primary: oklch(0.7 0.13 165);
-  --primary-foreground: oklch(0.16 0.02 265);
+  --primary: oklch(0.68 0.14 165);
+  --primary-foreground: oklch(0.14 0.02 265);
   --secondary: oklch(0.28 0.02 265);
   --secondary-foreground: oklch(0.96 0.01 95);
   --muted: oklch(0.28 0.02 265);
-  --muted-foreground: oklch(0.7 0.02 265);
-  --accent: oklch(0.3 0.04 165);
-  --accent-foreground: oklch(0.9 0.04 165);
+  --muted-foreground: oklch(0.72 0.02 265);
+  --accent: oklch(0.3 0.05 165);
+  --accent-foreground: oklch(0.92 0.04 165);
   --destructive: oklch(0.55 0.18 25);
   --destructive-foreground: oklch(0.99 0 0);
-  --border: oklch(0.32 0.02 265);
-  --input: oklch(0.32 0.02 265);
-  --ring: oklch(0.7 0.13 165);
-  --sidebar: oklch(0.2 0.02 265);
+  --border: oklch(0.35 0.02 265);
+  --input: oklch(0.35 0.02 265);
+  --ring: oklch(0.68 0.14 165);
+  --sidebar: oklch(0.18 0.02 265);
   --sidebar-foreground: oklch(0.96 0.01 95);
-  --ticket: oklch(0.24 0.02 265);
+  --ticket: oklch(0.2 0.02 265);
 }
 
-/* Pastel category tiles (daytime color chart) */
+/*
+  Category tile fills — higher chroma + mid lightness so labels stay dark and readable
+  (not washed pastel)
+*/
 :root {
-  --pastel-1: oklch(0.92 0.04 250);
-  --pastel-2: oklch(0.93 0.035 220);
-  --pastel-3: oklch(0.93 0.04 180);
-  --pastel-4: oklch(0.94 0.04 145);
-  --pastel-5: oklch(0.93 0.05 80);
-  --pastel-6: oklch(0.93 0.05 40);
-  --pastel-7: oklch(0.93 0.05 20);
-  --pastel-8: oklch(0.93 0.04 330);
-  --pastel-9: oklch(0.93 0.04 300);
-  --pastel-10: oklch(0.93 0.035 280);
+  --tile-1: oklch(0.82 0.08 250);
+  --tile-2: oklch(0.84 0.07 210);
+  --tile-3: oklch(0.84 0.09 165);
+  --tile-4: oklch(0.85 0.1 140);
+  --tile-5: oklch(0.86 0.11 85);
+  --tile-6: oklch(0.84 0.1 55);
+  --tile-7: oklch(0.84 0.1 30);
+  --tile-8: oklch(0.84 0.09 340);
+  --tile-9: oklch(0.83 0.09 300);
+  --tile-10: oklch(0.83 0.08 280);
+  --tile-fg: oklch(0.2 0.03 265);
+  --tile-muted: oklch(0.35 0.03 265);
 }
 
 @layer base {
@@ -106,7 +119,6 @@
     margin: 0;
     min-height: 100svh;
     font-family:
-      'Inter',
       system-ui,
       -apple-system,
       'Segoe UI',
@@ -118,13 +130,27 @@
     min-height: 100svh;
   }
 
-  /* Subtle scrollbar for POS panels */
+  /* Force square controls app-wide (override utility rounded-*) */
+  .rounded,
+  .rounded-sm,
+  .rounded-md,
+  .rounded-lg,
+  .rounded-xl,
+  .rounded-2xl,
+  .rounded-3xl,
+  .rounded-full {
+    border-radius: 0 !important;
+  }
+
   .pos-scroll::-webkit-scrollbar {
-    width: 6px;
-    height: 6px;
+    width: 8px;
+    height: 8px;
   }
   .pos-scroll::-webkit-scrollbar-thumb {
-    background: oklch(0.85 0.01 265);
-    border-radius: 999px;
+    background: oklch(0.7 0.02 265);
+    border-radius: 0;
+  }
+  .pos-scroll::-webkit-scrollbar-track {
+    background: oklch(0.94 0.01 265);
   }
 }

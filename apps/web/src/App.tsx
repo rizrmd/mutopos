@@ -11,7 +11,7 @@ import { ReceiptDetailPage, ReceiptsPage } from '@/pages/ReceiptsPage'
 function BootScreen() {
   return (
     <div className="flex min-h-svh flex-col items-center justify-center gap-2 bg-background text-muted-foreground">
-      <div className="flex size-10 items-center justify-center rounded-2xl bg-primary text-sm font-semibold text-primary-foreground">
+      <div className="flex size-10 items-center justify-center bg-primary text-sm font-semibold text-primary-foreground">
         M
       </div>
       <span className="text-sm">Loading MutoPOS…</span>

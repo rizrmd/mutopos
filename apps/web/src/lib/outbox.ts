@@ -61,9 +61,13 @@ export function startOutboxWorker(getTenant: () => TenantHeaders | null) {
   const tick = () => {
     void flushOutbox(getTenant)
   }
-  workerTimer = setInterval(tick, 2500)
+  // Seamless background sync — no manual Sync button needed
+  workerTimer = setInterval(tick, 1500)
   if (typeof window !== 'undefined') {
     window.addEventListener('online', tick)
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') tick()
+    })
   }
   tick()
 }

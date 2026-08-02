@@ -15,15 +15,15 @@ import { cacheProducts } from '@/lib/db'
 import { useSession } from '@/lib/session'
 import { cn } from '@/lib/utils'
 
-const PASTELS = [
-  'bg-[var(--pastel-6)]',
-  'bg-[var(--pastel-1)]',
-  'bg-[var(--pastel-9)]',
-  'bg-[var(--pastel-7)]',
-  'bg-[var(--pastel-3)]',
-  'bg-[var(--pastel-8)]',
-  'bg-[var(--pastel-5)]',
-  'bg-[var(--pastel-2)]',
+const TILES = [
+  'bg-[var(--tile-6)]',
+  'bg-[var(--tile-1)]',
+  'bg-[var(--tile-9)]',
+  'bg-[var(--tile-7)]',
+  'bg-[var(--tile-3)]',
+  'bg-[var(--tile-8)]',
+  'bg-[var(--tile-5)]',
+  'bg-[var(--tile-2)]',
 ]
 
 export function CatalogPage() {
@@ -90,23 +90,22 @@ export function CatalogPage() {
   }
 
   return (
-    <div className="mx-auto max-w-5xl space-y-6">
+    <div className="mx-auto max-w-5xl space-y-5">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Catalog</h1>
+        <h1 className="text-xl font-bold tracking-tight">Catalog</h1>
         <p className="text-sm text-muted-foreground">
-          Menus, categories and products — cached in RxDB for offline POS.
+          Categories and products for this business.
         </p>
       </div>
 
-      {/* Category pastel chips */}
       {categories.length > 0 ? (
         <div className="flex flex-wrap gap-2">
           {categories.map((c, i) => (
             <span
               key={c.id}
               className={cn(
-                'rounded-2xl px-3 py-2 text-sm font-medium',
-                PASTELS[i % PASTELS.length],
+                'px-3 py-2 text-sm font-semibold text-[var(--tile-fg)]',
+                TILES[i % TILES.length],
               )}
             >
               {c.name}
@@ -116,36 +115,30 @@ export function CatalogPage() {
       ) : null}
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <Card className="rounded-2xl shadow-sm">
-          <CardHeader>
+        <Card>
+          <CardHeader className="p-4 pb-2">
             <CardTitle className="text-base">Add product</CardTitle>
-            <CardDescription>
-              Default price in IDR minor units (rupiah).
-            </CardDescription>
+            <CardDescription>Price in IDR (rupiah).</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-3">
+          <CardContent className="space-y-3 p-4 pt-2">
             <Input
               placeholder="Name"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="h-10 rounded-xl"
             />
             <Input
               placeholder="SKU (optional)"
               value={sku}
               onChange={(e) => setSku(e.target.value)}
-              className="h-10 rounded-xl"
             />
             <Input
               placeholder="Price (IDR)"
               type="number"
               value={price}
               onChange={(e) => setPrice(e.target.value)}
-              className="h-10 rounded-xl"
             />
             <Button
               type="button"
-              className="rounded-xl"
               disabled={busy || !name}
               onClick={() => void addProduct()}
             >
@@ -155,35 +148,28 @@ export function CatalogPage() {
           </CardContent>
         </Card>
 
-        <Card className="rounded-2xl shadow-sm">
-          <CardHeader>
+        <Card>
+          <CardHeader className="p-4 pb-2">
             <CardTitle className="text-base">Add category</CardTitle>
-            <CardDescription>
-              Categories become pastel tiles on the POS menu.
-            </CardDescription>
+            <CardDescription>Shown as tiles on the POS menu.</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-3">
+          <CardContent className="space-y-3 p-4 pt-2">
             <Input
               placeholder="Category name"
               value={catName}
               onChange={(e) => setCatName(e.target.value)}
-              className="h-10 rounded-xl"
             />
             <Button
               type="button"
-              className="rounded-xl"
               disabled={busy || !catName}
               onClick={() => void addCategory()}
             >
               <Plus className="size-4" />
               Create category
             </Button>
-            <ul className="space-y-1.5 text-sm text-muted-foreground">
+            <ul className="space-y-1 text-sm text-muted-foreground">
               {categories.map((c) => (
-                <li key={c.id} className="flex items-center gap-2">
-                  <span className="size-1.5 rounded-full bg-primary" />
-                  {c.name}
-                </li>
+                <li key={c.id}>· {c.name}</li>
               ))}
               {categories.length === 0 ? <li>No categories yet</li> : null}
             </ul>
@@ -191,30 +177,34 @@ export function CatalogPage() {
         </Card>
       </div>
 
-      {error ? <p className="text-sm text-destructive">{error}</p> : null}
+      {error ? (
+        <p className="text-sm font-medium text-destructive">{error}</p>
+      ) : null}
 
-      <Card className="rounded-2xl shadow-sm">
-        <CardHeader>
+      <Card>
+        <CardHeader className="p-4 pb-2">
           <CardTitle className="text-base">
             Products ({products.length})
           </CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="p-4 pt-2">
           <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
             {products.map((p) => (
               <div
                 key={p.id}
-                className="rounded-2xl border border-border bg-card p-3 shadow-sm"
+                className="border border-border bg-card p-3"
               >
-                <div className="font-medium">{p.name}</div>
-                <div className="mt-0.5 text-sm text-muted-foreground">
+                <div className="font-semibold">{p.name}</div>
+                <div className="mt-0.5 text-sm text-foreground/70">
                   {formatIDR(p.price_minor ?? 0)}
                 </div>
-                <div className="mt-2 flex items-center justify-between text-[11px] text-muted-foreground">
-                  <span>{p.sku ?? 'No SKU'}</span>
+                <div className="mt-2 flex items-center justify-between text-[11px] font-medium">
+                  <span className="text-muted-foreground">
+                    {p.sku ?? 'No SKU'}
+                  </span>
                   <span
                     className={
-                      p.is_active ? 'text-emerald-700' : 'text-amber-700'
+                      p.is_active ? 'text-emerald-800' : 'text-amber-800'
                     }
                   >
                     {p.is_active ? 'Active' : 'Inactive'}

@@ -1,16 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useOutletContext } from 'react-router-dom'
 import { v4 as uuidv4 } from 'uuid'
-import {
-  Minus,
-  Plus,
-  Receipt,
-  Trash2,
-  Wifi,
-  WifiOff,
-} from 'lucide-react'
+import { Minus, Plus, Trash2 } from 'lucide-react'
 
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
   api,
@@ -19,7 +11,7 @@ import {
   type Product,
 } from '@/lib/api'
 import { cacheProducts, enqueueOutbox, getDb } from '@/lib/db'
-import { flushOutbox, subscribeOutbox, type OutboxStats } from '@/lib/outbox'
+import { flushOutbox } from '@/lib/outbox'
 import { useSession } from '@/lib/session'
 import { cn } from '@/lib/utils'
 
@@ -40,25 +32,26 @@ type LocalTicket = {
 
 type OutletCtx = { search: string; setSearch: (v: string) => void }
 
-const PASTELS = [
-  'bg-[var(--pastel-6)]',
-  'bg-[var(--pastel-1)]',
-  'bg-[var(--pastel-9)]',
-  'bg-[var(--pastel-7)]',
-  'bg-[var(--pastel-3)]',
-  'bg-[var(--pastel-8)]',
-  'bg-[var(--pastel-5)]',
-  'bg-[var(--pastel-2)]',
-  'bg-[var(--pastel-10)]',
-  'bg-[var(--pastel-4)]',
+/** High-contrast tile fills (mid tone + dark text — not washed pastel) */
+const TILES = [
+  'bg-[var(--tile-6)]',
+  'bg-[var(--tile-1)]',
+  'bg-[var(--tile-9)]',
+  'bg-[var(--tile-7)]',
+  'bg-[var(--tile-3)]',
+  'bg-[var(--tile-8)]',
+  'bg-[var(--tile-5)]',
+  'bg-[var(--tile-2)]',
+  'bg-[var(--tile-10)]',
+  'bg-[var(--tile-4)]',
 ]
 
 const TICKET_TINTS = [
-  'bg-emerald-500',
-  'bg-rose-500',
-  'bg-amber-400',
-  'bg-sky-500',
-  'bg-violet-500',
+  'bg-emerald-700',
+  'bg-rose-700',
+  'bg-amber-600',
+  'bg-sky-700',
+  'bg-violet-700',
 ]
 
 export function POSPage() {
@@ -76,12 +69,7 @@ export function POSPage() {
   const [message, setMessage] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
-  const [forceOffline, setForceOffline] = useState(false)
-  const [stats, setStats] = useState<OutboxStats | null>(null)
   const [tickets, setTickets] = useState<LocalTicket[]>([])
-  const [taxRate] = useState(0) // IDR sales tax optional; keep 0 unless configured
-
-  useEffect(() => subscribeOutbox(setStats), [])
 
   const loadTickets = useCallback(async () => {
     if (!businessId) return
@@ -113,7 +101,9 @@ export function POSPage() {
     try {
       const [res, cats] = await Promise.all([
         api.listProducts(tenant),
-        api.listCategories(tenant).catch(() => ({ categories: [] as Category[] })),
+        api
+          .listCategories(tenant)
+          .catch(() => ({ categories: [] as Category[] })),
       ])
       setProducts(res.products.filter((p) => p.is_active))
       setCategories(cats.categories.filter((c) => c.is_active))
@@ -142,12 +132,17 @@ export function POSPage() {
     void load()
   }, [load])
 
+  // Refresh tickets when outbox may have synced
+  useEffect(() => {
+    const t = setInterval(() => void loadTickets(), 4000)
+    return () => clearInterval(t)
+  }, [loadTickets])
+
   const subtotal = useMemo(
     () => cart.reduce((s, l) => s + l.unitPrice * l.qty, 0),
     [cart],
   )
-  const tax = useMemo(() => Math.round(subtotal * taxRate), [subtotal, taxRate])
-  const total = subtotal + tax
+  const total = subtotal
 
   const categoryCounts = useMemo(() => {
     const map = new Map<string, number>()
@@ -163,13 +158,13 @@ export function POSPage() {
       id: string
       name: string
       count: number
-      pastel: string
+      color: string
     }> = [
       {
         id: 'all',
         name: 'All items',
         count: products.length,
-        pastel: PASTELS[0],
+        color: TILES[0],
       },
     ]
     const sorted = [...categories].sort((a, b) => a.sort_order - b.sort_order)
@@ -178,16 +173,16 @@ export function POSPage() {
         id: c.id,
         name: c.name,
         count: categoryCounts.get(c.id) ?? 0,
-        pastel: PASTELS[(i + 1) % PASTELS.length],
+        color: TILES[(i + 1) % TILES.length],
       })
     })
     const uncat = categoryCounts.get('__uncategorized') ?? 0
     if (uncat > 0 || categories.length === 0) {
       tiles.push({
         id: '__uncategorized',
-        name: categories.length === 0 ? 'Menu' : 'Uncategorized',
+        name: categories.length === 0 ? 'Menu' : 'Other',
         count: uncat || products.length,
-        pastel: PASTELS[3],
+        color: TILES[3],
       })
     }
     return tiles
@@ -197,7 +192,7 @@ export function POSPage() {
     const q = search.trim().toLowerCase()
     return products.filter((p) => {
       if (selectedCategory === 'all') {
-        // show all
+        // all
       } else if (selectedCategory === '__uncategorized') {
         if (p.category_id) return false
       } else if (p.category_id !== selectedCategory) {
@@ -254,7 +249,11 @@ export function POSPage() {
     setError(null)
   }
 
-  async function checkout(mode: 'online' | 'outbox') {
+  /**
+   * Seamless checkout: always persist locally, try online when available,
+   * otherwise outbox — worker flushes automatically (no Force/Sync buttons).
+   */
+  async function checkout() {
     if (!tenant || !businessId || !outletId) {
       setError('Select business and outlet first')
       return
@@ -280,7 +279,7 @@ export function POSPage() {
       payments: [{ method: 'cash', amount_minor: total }],
       subtotal_minor: subtotal,
       discount_minor: 0,
-      tax_minor: tax,
+      tax_minor: 0,
       total_minor: total,
       currency_code: 'IDR',
     }
@@ -299,40 +298,44 @@ export function POSPage() {
         synced: false,
       })
 
-      const useOutbox =
-        mode === 'outbox' || forceOffline || !navigator.onLine
+      let receiptLabel = clientSaleId.slice(0, 8)
+      const online = typeof navigator === 'undefined' ? true : navigator.onLine
 
-      if (useOutbox) {
-        const commandId = uuidv4()
+      if (online) {
+        try {
+          const sale = await api.completeSaleOnline(tenant, payload)
+          const local = await db.sales.findOne(clientSaleId).exec()
+          if (local) {
+            await local.patch({
+              synced: true,
+              serverId: sale.id,
+              receiptNo: sale.receipt_no ?? undefined,
+            })
+          }
+          receiptLabel = sale.receipt_no ?? sale.id.slice(0, 8)
+          setMessage(`Sale complete · ${receiptLabel} · ${formatIDR(sale.total_minor)}`)
+        } catch {
+          // Fall through to outbox — seamless offline path
+          await enqueueOutbox({
+            id: uuidv4(),
+            type: 'sale.complete',
+            payload,
+            businessId,
+          })
+          setMessage(`Sale saved · will sync · ${formatIDR(total)}`)
+          void flushOutbox(() => tenant)
+        }
+      } else {
         await enqueueOutbox({
-          id: commandId,
+          id: uuidv4(),
           type: 'sale.complete',
           payload,
           businessId,
         })
-        setMessage(
-          `Sale saved offline (ticket ${clientSaleId.slice(0, 6).toUpperCase()}). Outbox will push when online.`,
-        )
-        setCart([])
-        if (!forceOffline && navigator.onLine) {
-          await flushOutbox(() => tenant)
-          setMessage('Sale enqueued and sync attempted via outbox.')
-        }
-      } else {
-        const sale = await api.completeSaleOnline(tenant, payload)
-        const local = await db.sales.findOne(clientSaleId).exec()
-        if (local) {
-          await local.patch({
-            synced: true,
-            serverId: sale.id,
-            receiptNo: sale.receipt_no ?? undefined,
-          })
-        }
-        setMessage(
-          `Sale completed · receipt ${sale.receipt_no ?? sale.id.slice(0, 8)} · ${formatIDR(sale.total_minor)}`,
-        )
-        setCart([])
+        setMessage(`Sale saved offline · ${formatIDR(total)}`)
       }
+
+      setCart([])
       await loadTickets()
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
@@ -353,43 +356,9 @@ export function POSPage() {
       <div className="flex min-h-0 flex-1">
         {/* Center: categories + products */}
         <section className="flex min-w-0 flex-1 flex-col">
-          <div className="flex flex-wrap items-center gap-2 border-b border-border px-4 py-2">
-            {stats?.online && !forceOffline ? (
-              <Badge variant="success" className="gap-1">
-                <Wifi className="size-3" /> Online
-              </Badge>
-            ) : (
-              <Badge variant="warning" className="gap-1">
-                <WifiOff className="size-3" /> Offline path
-              </Badge>
-            )}
-            <Badge variant="secondary">
-              Outbox pending: {stats?.pending ?? 0}
-              {(stats?.failed ?? 0) > 0 ? ` · failed ${stats?.failed}` : ''}
-            </Badge>
-            <Button
-              type="button"
-              size="sm"
-              variant={forceOffline ? 'default' : 'outline'}
-              className="h-7 rounded-full text-xs"
-              onClick={() => setForceOffline((v) => !v)}
-            >
-              {forceOffline ? 'Force outbox ON' : 'Force outbox'}
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              className="h-7 rounded-full text-xs"
-              onClick={() => void flushOutbox(() => tenant)}
-            >
-              Sync now
-            </Button>
-          </div>
-
-          {/* Category tiles */}
-          <div className="pos-scroll overflow-x-auto border-b border-border px-4 py-3">
-            <div className="grid min-w-[28rem] grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-4">
+          {/* Category tiles — square, contrast fills */}
+          <div className="pos-scroll border-b border-border px-3 py-3">
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4">
               {categoryTiles.map((tile) => {
                 const active = selectedCategory === tile.id
                 return (
@@ -398,17 +367,17 @@ export function POSPage() {
                     type="button"
                     onClick={() => setSelectedCategory(tile.id)}
                     className={cn(
-                      'rounded-2xl px-4 py-3 text-left transition-all',
-                      tile.pastel,
+                      'px-3 py-3 text-left transition-colors',
+                      tile.color,
                       active
-                        ? 'ring-2 ring-foreground/15 shadow-sm scale-[1.01]'
-                        : 'hover:brightness-[0.98]',
+                        ? 'outline outline-2 outline-offset-[-2px] outline-foreground'
+                        : 'hover:brightness-95',
                     )}
                   >
-                    <div className="text-sm font-semibold text-foreground/90">
+                    <div className="text-sm font-bold text-[var(--tile-fg)]">
                       {tile.name}
                     </div>
-                    <div className="mt-1 text-xs text-foreground/55">
+                    <div className="mt-1 text-xs font-medium text-[var(--tile-muted)]">
                       {tile.count} item{tile.count === 1 ? '' : 's'}
                     </div>
                   </button>
@@ -418,57 +387,53 @@ export function POSPage() {
           </div>
 
           {/* Product grid */}
-          <div className="pos-scroll min-h-0 flex-1 overflow-y-auto p-4">
+          <div className="pos-scroll min-h-0 flex-1 overflow-y-auto p-3">
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
               {filteredProducts.map((p) => {
                 const inCart = cart.find((l) => l.productId === p.id)
                 return (
                   <div
                     key={p.id}
-                    className="group relative flex flex-col rounded-2xl border border-border bg-card p-3 shadow-sm transition hover:border-primary/30 hover:shadow"
+                    className="relative flex flex-col border border-border bg-card p-3 transition hover:border-foreground"
                   >
                     <button
                       type="button"
                       onClick={() => addToCart(p)}
                       className="flex flex-1 flex-col text-left"
                     >
-                      <div className="pr-8 text-sm font-semibold leading-snug">
+                      <div className="pr-8 text-sm font-semibold leading-snug text-foreground">
                         {p.name}
                       </div>
-                      <div className="mt-1 text-sm text-muted-foreground">
+                      <div className="mt-1 text-sm font-medium text-foreground/70">
                         {formatIDR(p.price_minor ?? 0)}
                       </div>
                       {p.sku ? (
-                        <div className="mt-auto pt-2 text-[10px] text-muted-foreground/80">
+                        <div className="mt-auto pt-2 text-[11px] text-muted-foreground">
                           {p.sku}
                         </div>
-                      ) : (
-                        <div className="mt-auto pt-2 text-[10px] text-muted-foreground/60">
-                          Orders → Kitchen
-                        </div>
-                      )}
+                      ) : null}
                     </button>
                     <button
                       type="button"
                       aria-label={`Add ${p.name}`}
                       onClick={() => addToCart(p)}
-                      className="absolute right-2 top-2 flex size-7 items-center justify-center rounded-full border border-border bg-card text-muted-foreground shadow-sm transition hover:border-primary hover:bg-primary hover:text-primary-foreground"
+                      className="absolute right-2 top-2 flex size-7 items-center justify-center border border-border bg-background text-foreground transition hover:bg-foreground hover:text-background"
                     >
                       <Plus className="size-3.5" />
                     </button>
                     {inCart ? (
-                      <div className="absolute bottom-2 right-2 flex items-center gap-1 rounded-full bg-muted px-1.5 py-0.5 text-xs font-semibold">
+                      <div className="absolute bottom-2 right-2 flex items-center gap-0 border border-border bg-background text-xs font-bold">
                         <button
                           type="button"
-                          className="flex size-5 items-center justify-center rounded-full hover:bg-card"
+                          className="flex size-6 items-center justify-center hover:bg-muted"
                           onClick={() => changeQty(p.id, -1)}
                         >
                           <Minus className="size-3" />
                         </button>
-                        <span className="min-w-4 text-center">{inCart.qty}</span>
+                        <span className="min-w-5 text-center">{inCart.qty}</span>
                         <button
                           type="button"
-                          className="flex size-5 items-center justify-center rounded-full hover:bg-card"
+                          className="flex size-6 items-center justify-center hover:bg-muted"
                           onClick={() => changeQty(p.id, 1)}
                         >
                           <Plus className="size-3" />
@@ -480,77 +445,71 @@ export function POSPage() {
               })}
               {filteredProducts.length === 0 ? (
                 <p className="col-span-full py-12 text-center text-sm text-muted-foreground">
-                  No products match. Add items in Catalog or clear filters.
+                  No products. Add some in Catalog.
                 </p>
               ) : null}
             </div>
           </div>
         </section>
 
-        {/* Right: order ticket */}
-        <aside className="flex w-[20rem] shrink-0 flex-col border-l border-border bg-ticket xl:w-[22rem]">
-          <div className="flex items-start justify-between gap-2 border-b border-border px-4 py-3">
+        {/* Right ticket */}
+        <aside className="flex w-80 shrink-0 flex-col border-l border-border bg-card xl:w-[22rem]">
+          <div className="flex items-start justify-between gap-2 border-b border-border px-3 py-3">
             <div>
-              <div className="text-base font-semibold">
-                {outletName}
-              </div>
+              <div className="text-sm font-bold">{outletName}</div>
               <div className="text-xs text-muted-foreground">{staffName}</div>
             </div>
-            <div className="flex items-center gap-1">
-              <Button
-                type="button"
-                size="icon"
-                variant="ghost"
-                className="size-8 text-muted-foreground"
-                title="Clear cart"
-                onClick={clearCart}
-                disabled={cart.length === 0}
-              >
-                <Trash2 className="size-4" />
-              </Button>
-            </div>
+            <Button
+              type="button"
+              size="icon"
+              variant="ghost"
+              className="size-8 text-muted-foreground"
+              title="Clear cart"
+              onClick={clearCart}
+              disabled={cart.length === 0}
+            >
+              <Trash2 className="size-4" />
+            </Button>
           </div>
 
-          <div className="pos-scroll min-h-0 flex-1 overflow-y-auto px-4 py-3">
+          <div className="pos-scroll min-h-0 flex-1 overflow-y-auto px-3 py-3">
             {cart.length === 0 ? (
-              <div className="flex h-full flex-col items-center justify-center gap-2 py-10 text-center text-sm text-muted-foreground">
-                <Receipt className="size-8 opacity-40" />
-                <p>Ticket is empty</p>
-                <p className="text-xs">Tap products to add lines</p>
+              <div className="flex h-full items-center justify-center py-10 text-center text-sm text-muted-foreground">
+                Ticket empty — tap products
               </div>
             ) : (
               <ul className="space-y-3">
                 {cart.map((l, idx) => (
                   <li key={l.productId} className="text-sm">
                     <div className="flex items-start gap-2">
-                      <span className="w-4 shrink-0 text-xs font-medium text-muted-foreground">
+                      <span className="w-4 shrink-0 text-xs font-semibold text-muted-foreground">
                         {idx + 1}
                       </span>
                       <div className="min-w-0 flex-1">
                         <div className="flex items-start justify-between gap-2">
-                          <span className="font-medium leading-snug">
+                          <span className="font-semibold leading-snug">
                             {l.name}
                           </span>
-                          <span className="shrink-0 font-semibold tabular-nums">
+                          <span className="shrink-0 font-bold tabular-nums">
                             {formatIDR(l.unitPrice * l.qty)}
                           </span>
                         </div>
-                        <div className="mt-1 flex items-center justify-between text-xs text-muted-foreground">
+                        <div className="mt-1.5 flex items-center justify-between text-xs text-muted-foreground">
                           <span>{formatIDR(l.unitPrice)} each</span>
-                          <div className="flex items-center gap-1">
+                          <div className="flex items-center border border-border">
                             <button
                               type="button"
-                              className="flex size-6 items-center justify-center rounded-md border border-border hover:bg-muted"
+                              className="flex size-6 items-center justify-center hover:bg-muted"
                               onClick={() => changeQty(l.productId, -1)}
                             >
                               <Minus className="size-3" />
                             </button>
-                            <span className="w-5 text-center font-semibold text-foreground">
+                            <span className="w-6 text-center font-bold text-foreground">
                               {l.qty}
                             </span>
                             <button
                               type="button"
-                              className="flex size-6 items-center justify-center rounded-md border border-border hover:bg-muted"
+                              className="flex size-6 items-center justify-center hover:bg-muted"
                               onClick={() => changeQty(l.productId, 1)}
                             >
                               <Plus className="size-3" />
@@ -565,80 +524,62 @@ export function POSPage() {
             )}
           </div>
 
-          <div className="border-t border-border px-4 py-3 space-y-2">
-            <div className="flex justify-between text-xs text-muted-foreground">
-              <span>Tax {taxRate > 0 ? `${(taxRate * 100).toFixed(1)}%` : '—'}</span>
-              <span className="tabular-nums">{formatIDR(tax)}</span>
-            </div>
+          <div className="space-y-2 border-t border-border px-3 py-3">
             <div className="flex justify-between text-xs text-muted-foreground">
               <span>Subtotal</span>
-              <span className="tabular-nums">{formatIDR(subtotal)}</span>
+              <span className="tabular-nums font-medium text-foreground">
+                {formatIDR(subtotal)}
+              </span>
             </div>
-            <div className="flex justify-between text-base font-semibold">
+            <div className="flex justify-between text-base font-bold">
               <span>Total</span>
               <span className="tabular-nums">{formatIDR(total)}</span>
             </div>
 
             {message ? (
-              <p className="text-xs text-primary" role="status">
+              <p className="text-xs font-medium text-primary" role="status">
                 {message}
               </p>
             ) : null}
             {error ? (
-              <p className="text-xs text-destructive" role="alert">
+              <p className="text-xs font-medium text-destructive" role="alert">
                 {error}
               </p>
             ) : null}
-            {stats?.lastError ? (
-              <p className="text-[10px] text-muted-foreground">
-                Last sync error: {stats.lastError}
-              </p>
-            ) : null}
 
-            <div className="grid grid-cols-2 gap-2 pt-1">
-              <Button
-                type="button"
-                variant="outline"
-                className="h-10 rounded-xl text-xs"
-                disabled={busy || cart.length === 0 || !outletId}
-                onClick={() => void checkout('outbox')}
-              >
-                Via outbox
-              </Button>
-              <Button
-                type="button"
-                className="h-10 rounded-xl bg-primary text-sm font-semibold shadow-sm"
-                disabled={busy || cart.length === 0 || !outletId}
-                onClick={() => void checkout('online')}
-              >
-                Fire orders
-              </Button>
-            </div>
+            <Button
+              type="button"
+              className="h-11 w-full text-sm font-bold"
+              disabled={busy || cart.length === 0 || !outletId}
+              onClick={() => void checkout()}
+            >
+              {busy ? 'Processing…' : 'Fire orders'}
+            </Button>
             {!outletId ? (
-              <p className="text-[11px] text-amber-700">
-                Select an outlet in the sidebar to checkout.
+              <p className="text-[11px] font-medium text-amber-800">
+                Select an outlet to checkout.
               </p>
             ) : null}
           </div>
         </aside>
       </div>
 
-      {/* Bottom open tickets strip */}
-      <footer className="shrink-0 border-t border-border bg-card/90 px-3 py-2">
+      {/* Bottom tickets */}
+      <footer className="shrink-0 border-t border-border bg-card px-2 py-2">
         <div className="pos-scroll flex gap-2 overflow-x-auto">
           {tickets.length === 0 ? (
-            <div className="flex h-14 items-center px-2 text-xs text-muted-foreground">
-              No recent tickets — completed sales appear here
+            <div className="flex h-12 items-center px-2 text-xs text-muted-foreground">
+              Recent tickets appear here
             </div>
           ) : (
             tickets.map((t, i) => (
               <div
                 key={t.id}
-                className="flex h-14 min-w-[11rem] items-center gap-2 rounded-xl border border-border bg-background px-2.5 shadow-sm"
+                className="flex h-12 min-w-[10.5rem] items-center gap-2 border border-border bg-background px-2"
               >
                 <span
                   className={cn(
-                    'flex size-8 shrink-0 items-center justify-center rounded-lg text-[10px] font-bold text-white',
+                    'flex size-7 shrink-0 items-center justify-center text-[10px] font-bold text-white',
                     TICKET_TINTS[i % TICKET_TINTS.length],
                   )}
                 >
@@ -648,25 +589,25 @@ export function POSPage() {
                   <div className="truncate text-xs font-semibold">
                     {staffName.split(' ')[0] ?? 'Sale'}
                   </div>
-                  <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
-                    <span>
+                  <div className="text-[10px] font-medium">
+                    <span className="text-muted-foreground">
                       {t.lineCount} item{t.lineCount === 1 ? '' : 's'}
                     </span>
-                    <span>·</span>
+                    <span className="mx-1 text-muted-foreground">·</span>
                     <span
                       className={
-                        t.synced ? 'text-emerald-700' : 'text-amber-700'
+                        t.synced ? 'text-emerald-800' : 'text-amber-800'
                       }
                     >
-                      {t.synced ? 'Ready' : 'In progress'}
+                      {t.synced ? 'Synced' : 'Pending'}
                     </span>
                   </div>
                 </div>
                 <div className="text-right leading-tight">
-                  <div className="text-[10px] font-medium tabular-nums text-muted-foreground">
+                  <div className="text-[10px] tabular-nums text-muted-foreground">
                     {formatElapsed(t.createdAt)}
                   </div>
-                  <div className="text-[10px] font-semibold tabular-nums">
+                  <div className="text-[10px] font-bold tabular-nums">
                     {formatIDR(t.totalMinor)}
                   </div>
                 </div>
