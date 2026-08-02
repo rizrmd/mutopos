@@ -65,6 +65,7 @@ POS data (inventory, prices, multi-device cashiers, refunds) must not diverge pe
 
 ## Related docs
 
+- [SaaS ERD (entities, multi-tenant, outbox tables)](../erd.md)
 - [ADR 0001 — Offline-first + custom outbox](./adr/0001-offline-first-custom-outbox.md)
 - [Local store (RxDB default)](./local-store.md)
 - [Outbox & sync path](./outbox-sync.md)

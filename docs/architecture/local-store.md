@@ -111,6 +111,7 @@ Exact schemas live with implementation; this doc only anchors the architecture.
 
 ## Related
 
+- [SaaS ERD — server tables and client collection mapping](../erd.md)  
 - [ADR 0002 — RxDB default](./adr/0002-rxdb-default-local-store.md)  
 - [Outbox & sync](./outbox-sync.md)  
 - [Overview](./overview.md)  

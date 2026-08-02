@@ -106,6 +106,7 @@ RxDB holds outbox documents and reactive “pending sync” badges in the UI. It
 
 ## Related
 
+- [SaaS ERD — `command_receipts`, devices, client vs server](../erd.md)  
 - [ADR 0001](./adr/0001-offline-first-custom-outbox.md)  
 - [Overview](./overview.md)  
 - [Local store](./local-store.md)  
