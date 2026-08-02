@@ -271,3 +271,100 @@ export async function cacheProducts(
     }
   }
 }
+
+/** Full catalog snapshot (products + categories) for offline-first POS paint. */
+export type CatalogSnapshot = {
+  products: Array<{
+    id: string
+    category_id?: string | null
+    sku?: string | null
+    barcode?: string | null
+    name: string
+    description?: string | null
+    unit?: string | null
+    track_stock: boolean
+    is_active: boolean
+    price_minor?: number | null
+    currency_code?: string | null
+  }>
+  categories: Array<{
+    id: string
+    name: string
+    sort_order: number
+    is_active: boolean
+  }>
+  updatedAt: number
+}
+
+function catalogMetaId(businessId: string) {
+  return `catalog:${businessId}`
+}
+
+export async function cacheCatalog(
+  businessId: string,
+  products: CatalogSnapshot['products'],
+  categories: CatalogSnapshot['categories'],
+): Promise<void> {
+  const db = await getDb()
+  const value = JSON.stringify({
+    products,
+    categories,
+    updatedAt: Date.now(),
+  } satisfies CatalogSnapshot)
+  const id = catalogMetaId(businessId)
+  const existing = await db.meta.findOne(id).exec()
+  if (existing) {
+    await existing.patch({ value })
+  } else {
+    await db.meta.insert({ id, value })
+  }
+  // Keep product collection in sync for queries / legacy readers.
+  await cacheProducts(businessId, products)
+}
+
+export async function getLocalCatalog(
+  businessId: string,
+): Promise<CatalogSnapshot | null> {
+  try {
+    const db = await getDb()
+    const snap = await db.meta.findOne(catalogMetaId(businessId)).exec()
+    if (snap?.value) {
+      try {
+        const parsed = JSON.parse(snap.value) as CatalogSnapshot
+        if (Array.isArray(parsed.products)) {
+          return {
+            products: parsed.products,
+            categories: Array.isArray(parsed.categories)
+              ? parsed.categories
+              : [],
+            updatedAt: parsed.updatedAt ?? 0,
+          }
+        }
+      } catch {
+        /* fall through to products collection */
+      }
+    }
+
+    // Fallback: products collection only (older caches without categories).
+    const local = await db.products
+      .find({ selector: { businessId } })
+      .exec()
+    if (local.length === 0) return null
+    return {
+      products: local.map((d) => ({
+        id: d.id,
+        name: d.name,
+        sku: d.sku,
+        price_minor: d.priceMinor,
+        track_stock: true,
+        is_active: d.isActive,
+        category_id: null,
+      })),
+      categories: [],
+      updatedAt: 0,
+    }
+  } catch (err) {
+    console.error('[mutopos] getLocalCatalog failed', err)
+    return null
+  }
+}

@@ -28,6 +28,9 @@ type StoredSession = {
   businessId?: string
   outletId?: string
   staffId?: string
+  /** Cached for offline shell (outlet/staff pickers). */
+  outlets?: Outlet[]
+  staff?: Staff[]
 }
 
 type SessionContextValue = {
@@ -93,10 +96,12 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         businessId: partial.businessId ?? businessId ?? undefined,
         outletId: partial.outletId ?? outletId ?? undefined,
         staffId: partial.staffId ?? staffId ?? undefined,
+        outlets: partial.outlets ?? outlets,
+        staff: partial.staff ?? staff,
       }
       saveStored(next)
     },
-    [memberships, businessId, outletId, staffId],
+    [memberships, businessId, outletId, staffId, outlets, staff],
   )
 
   const tenant = useMemo<TenantHeaders | null>(() => {
@@ -119,44 +124,54 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       staffId,
       deviceKey,
     }
-    const [o, s, me] = await Promise.all([
-      api.listOutlets(t),
-      api.listStaff(t),
-      api.me(token).catch(() => null),
-    ])
-    setOutlets(o.outlets)
-    setStaff(s.staff)
-    if (me) {
-      setUser(me.user)
-      setMemberships(me.memberships)
-      saveStored({
-        token,
-        user: me.user,
-        memberships: me.memberships,
-        businessId,
-        outletId: outletId ?? undefined,
-        staffId: staffId ?? undefined,
-      })
-    }
-    if (!outletId && o.outlets[0]) {
-      setOutletIdState(o.outlets[0].id)
-    }
-    // Prefer floor cashier when nothing selected yet
-    if (!staffId) {
-      const cashiers = s.staff.filter((x) => x.role === 'cashier')
-      const pick = cashiers[0] ?? s.staff[0]
-      if (pick) setStaffIdState(pick.id)
-    }
-    if (deviceKey) {
-      try {
-        await api.registerDevice(t, {
-          device_key: deviceKey,
-          label: 'Web POS',
-          outlet_id: outletId ?? o.outlets[0]?.id,
+    try {
+      const [o, s, me] = await Promise.all([
+        api.listOutlets(t),
+        api.listStaff(t),
+        api.me(token).catch(() => null),
+      ])
+      setOutlets(o.outlets)
+      setStaff(s.staff)
+      const cached = loadStored()
+      const nextUser = me?.user ?? cached?.user
+      const nextMemberships = me?.memberships ?? cached?.memberships ?? []
+      if (me?.user) setUser(me.user)
+      if (me?.memberships) setMemberships(me.memberships)
+      if (nextUser) {
+        saveStored({
+          token,
+          user: nextUser,
+          memberships: nextMemberships,
+          businessId,
+          outletId: outletId ?? undefined,
+          staffId: staffId ?? undefined,
+          outlets: o.outlets,
+          staff: s.staff,
         })
-      } catch {
-        // non-fatal
       }
+      if (!outletId && o.outlets[0]) {
+        setOutletIdState(o.outlets[0].id)
+      }
+      // Prefer floor cashier when nothing selected yet
+      if (!staffId) {
+        const cashiers = s.staff.filter((x) => x.role === 'cashier')
+        const pick = cashiers[0] ?? s.staff[0]
+        if (pick) setStaffIdState(pick.id)
+      }
+      if (deviceKey) {
+        try {
+          await api.registerDevice(t, {
+            device_key: deviceKey,
+            label: 'Web POS',
+            outlet_id: outletId ?? o.outlets[0]?.id,
+          })
+        } catch {
+          // non-fatal
+        }
+      }
+    } catch (err) {
+      // Offline / network — keep cached outlets, staff, and session.
+      console.warn('[mutopos] refreshTenantData offline or failed', err)
     }
   }, [token, businessId, outletId, staffId, deviceKey])
 
@@ -168,9 +183,21 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         setDeviceKey(key)
         const stored = loadStored()
         if (stored?.token) {
+          // Offline-first: restore local session immediately so POS can paint
+          // cached catalog without waiting on /me.
+          setToken(stored.token)
+          setUser(stored.user)
+          setMemberships(stored.memberships)
+          setBusinessIdState(
+            stored.businessId ?? stored.memberships[0]?.business_id ?? null,
+          )
+          setOutletIdState(stored.outletId ?? null)
+          setStaffIdState(stored.staffId ?? null)
+          if (stored.outlets?.length) setOutlets(stored.outlets)
+          if (stored.staff?.length) setStaff(stored.staff)
+
           try {
             const me = await api.me(stored.token)
-            setToken(stored.token)
             setUser(me.user)
             setMemberships(me.memberships)
             const biz =
@@ -179,8 +206,6 @@ export function SessionProvider({ children }: { children: ReactNode }) {
                 ? stored.businessId
                 : me.memberships[0]?.business_id
             setBusinessIdState(biz ?? null)
-            setOutletIdState(stored.outletId ?? null)
-            setStaffIdState(stored.staffId ?? null)
             saveStored({
               token: stored.token,
               user: me.user,
@@ -188,9 +213,32 @@ export function SessionProvider({ children }: { children: ReactNode }) {
               businessId: biz,
               outletId: stored.outletId,
               staffId: stored.staffId,
+              outlets: stored.outlets,
+              staff: stored.staff,
             })
-          } catch {
-            saveStored(null)
+          } catch (err) {
+            // Only wipe session on auth rejection (401). Network/offline keeps
+            // the local session so the cashier can keep selling.
+            const status =
+              err && typeof err === 'object' && 'status' in err
+                ? Number((err as { status: number }).status)
+                : 0
+            if (status === 401) {
+              setToken(null)
+              setUser(null)
+              setMemberships([])
+              setBusinessIdState(null)
+              setOutletIdState(null)
+              setStaffIdState(null)
+              setOutlets([])
+              setStaff([])
+              saveStored(null)
+            } else {
+              console.warn(
+                '[mutopos] /me unreachable; continuing with cached session',
+                err,
+              )
+            }
           }
         }
       } catch (err) {

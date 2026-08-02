@@ -10,7 +10,7 @@ import {
   type Category,
   type Product,
 } from '@/lib/api'
-import { cacheProducts, enqueueOutbox, getDb } from '@/lib/db'
+import { cacheCatalog, enqueueOutbox, getDb, getLocalCatalog } from '@/lib/db'
 import { flushOutbox } from '@/lib/outbox'
 import { useSession } from '@/lib/session'
 import { cn } from '@/lib/utils'
@@ -118,8 +118,49 @@ export function POSPage() {
     )
   }, [businessId, staffName])
 
+  const applyCatalog = useCallback(
+    (list: Product[], cats: Category[], pickDefaultCategory: boolean) => {
+      const activeProducts = list.filter((p) => p.is_active)
+      const activeCats = cats.filter((c) => c.is_active)
+      setProducts(activeProducts)
+      setCategories(activeCats)
+      if (!pickDefaultCategory) return
+      // Prefer "all" when products lack categories (legacy local cache).
+      const hasCategoryIds = activeProducts.some((p) => p.category_id)
+      if (!hasCategoryIds || activeCats.length === 0) {
+        setSelectedCategory('all')
+        return
+      }
+      const oysters = activeCats.find(
+        (c) => c.name.toLowerCase() === 'oysters',
+      )
+      if (oysters) setSelectedCategory(oysters.id)
+      else setSelectedCategory(activeCats[0].id)
+    },
+    [],
+  )
+
   const load = useCallback(async () => {
-    if (!tenant || !businessId) return
+    if (!businessId) return
+
+    // 1) Offline-first: paint from RxDB/meta immediately (no network wait).
+    let hadLocal = false
+    try {
+      const local = await getLocalCatalog(businessId)
+      if (local && local.products.length > 0) {
+        hadLocal = true
+        applyCatalog(local.products, local.categories, true)
+        setSeedHint(null)
+      }
+    } catch (err) {
+      console.warn('[mutopos] local catalog read failed', err)
+    }
+
+    // Tickets are always local.
+    await loadTickets()
+
+    // 2) Revalidate from API when tenant headers exist (online path).
+    if (!tenant) return
     try {
       let [res, cats] = await Promise.all([
         api.listProducts(tenant),
@@ -128,9 +169,10 @@ export function POSPage() {
           .catch(() => ({ categories: [] as Category[] })),
       ])
 
-      // Empty / thin catalog → pull Vita demo (idempotent server-side)
+      // Empty / thin catalog and nothing local → pull Vita demo (online only).
       const needsDemo =
         !seededOnce &&
+        !hadLocal &&
         (cats.categories.length === 0 || res.products.length < 5)
       if (needsDemo) {
         try {
@@ -159,40 +201,24 @@ export function POSPage() {
         }
       }
 
-      setProducts(res.products.filter((p) => p.is_active))
-      setCategories(cats.categories.filter((c) => c.is_active))
-      await cacheProducts(businessId, res.products)
-
-      // Default to Oysters category like the mockup when present
-      const oysters = cats.categories.find(
-        (c) => c.name.toLowerCase() === 'oysters',
-      )
-      if (oysters) setSelectedCategory(oysters.id)
-      else if (cats.categories[0]) setSelectedCategory(cats.categories[0].id)
+      applyCatalog(res.products, cats.categories, true)
+      await cacheCatalog(businessId, res.products, cats.categories)
+      if (res.products.length > 0) setSeedHint(null)
     } catch {
-      const db = await getDb()
-      const local = await db.products
-        .find({ selector: { businessId, isActive: true } })
-        .exec()
-      setProducts(
-        local.map((d) => ({
-          id: d.id,
-          name: d.name,
-          sku: d.sku,
-          price_minor: d.priceMinor,
-          track_stock: true,
-          is_active: d.isActive,
-          category_id: null,
-        })),
-      )
+      // Network failed — local paint already applied above (or still empty).
+      if (!hadLocal) {
+        setSeedHint(
+          'No cached catalog and server unreachable. Connect once to sync products.',
+        )
+      }
     }
-    await loadTickets()
   }, [
     tenant,
     businessId,
     loadTickets,
     seededOnce,
     refreshTenantData,
+    applyCatalog,
   ])
 
   useEffect(() => {

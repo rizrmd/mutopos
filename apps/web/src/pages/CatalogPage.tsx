@@ -11,7 +11,7 @@ import {
 } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { api, formatMoney, type Category, type Product } from '@/lib/api'
-import { cacheProducts } from '@/lib/db'
+import { cacheCatalog, getLocalCatalog } from '@/lib/db'
 import { useSession } from '@/lib/session'
 import { cn } from '@/lib/utils'
 
@@ -41,15 +41,38 @@ export function CatalogPage() {
   const [busy, setBusy] = useState(false)
 
   const load = useCallback(async () => {
-    if (!tenant) return
-    const [p, c] = await Promise.all([
-      api.listProducts(tenant),
-      api.listCategories(tenant),
-    ])
-    setProducts(p.products)
-    setCategories(c.categories)
+    let hadLocal = false
+    // Offline-first: show cached catalog before network.
     if (businessId) {
-      await cacheProducts(businessId, p.products)
+      try {
+        const local = await getLocalCatalog(businessId)
+        if (local && local.products.length > 0) {
+          hadLocal = true
+          setProducts(local.products)
+          setCategories(local.categories)
+        }
+      } catch {
+        /* ignore local read errors */
+      }
+    }
+
+    if (!tenant) return
+    try {
+      const [p, c] = await Promise.all([
+        api.listProducts(tenant),
+        api.listCategories(tenant),
+      ])
+      setProducts(p.products)
+      setCategories(c.categories)
+      if (businessId) {
+        await cacheCatalog(businessId, p.products, c.categories)
+      }
+      setError(null)
+    } catch (e) {
+      // Keep local list if present; only surface error when empty.
+      if (!hadLocal) {
+        setError(e instanceof Error ? e.message : String(e))
+      }
     }
   }, [tenant, businessId])
 
