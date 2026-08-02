@@ -16,9 +16,9 @@ import { useSession } from '@/lib/session'
 export function LoginPage() {
   const { requestOTP, loginWithOTP } = useSession()
   const navigate = useNavigate()
-  const [phone, setPhone] = useState('+628')
+  const [phone, setPhone] = useState('')
   const [code, setCode] = useState('')
-  const [displayName, setDisplayName] = useState('David Ross')
+  const [displayName, setDisplayName] = useState('')
   const [devCode, setDevCode] = useState<string | undefined>()
   const [step, setStep] = useState<'phone' | 'otp'>('phone')
   const [error, setError] = useState<string | null>(null)
@@ -69,8 +69,7 @@ export function LoginPage() {
           </div>
           <CardTitle className="text-lg">Sign in</CardTitle>
           <CardDescription>
-            E.164 phone. Dev stub code is returned in the response (default{' '}
-            <code className="bg-muted px-1">000000</code>).
+            Enter your phone in E.164 format (e.g. +6281234567890).
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4 p-5 pt-0">
@@ -97,7 +96,7 @@ export function LoginPage() {
                   id="name"
                   value={displayName}
                   onChange={(e) => setDisplayName(e.target.value)}
-                  placeholder="David Ross"
+                  placeholder="Your name"
                   className="h-10"
                 />
               </div>

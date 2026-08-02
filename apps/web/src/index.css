@@ -30,71 +30,71 @@
   --radius-2xl: 0;
 }
 
-/* Vita POS daytime mode — soft greys, pastel surfaces, teal primary.
-   Square geometry: no rounded corners. */
+/* Square-inspired retail POS — cool greys, blue primary, square geometry. */
 :root {
   --radius: 0;
-  --background: oklch(0.97 0.006 260);
-  --foreground: oklch(0.28 0.02 265);
+  --background: oklch(0.965 0.005 250);
+  --foreground: oklch(0.22 0.02 255);
   --card: oklch(1 0 0);
-  --card-foreground: oklch(0.28 0.02 265);
+  --card-foreground: oklch(0.22 0.02 255);
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.28 0.02 265);
-  --primary: oklch(0.62 0.14 165);
+  --popover-foreground: oklch(0.22 0.02 255);
+  /* Square-like blue CTA */
+  --primary: oklch(0.52 0.18 255);
   --primary-foreground: oklch(0.99 0 0);
-  --secondary: oklch(0.96 0.012 265);
-  --secondary-foreground: oklch(0.32 0.03 265);
-  --muted: oklch(0.955 0.01 265);
-  --muted-foreground: oklch(0.52 0.02 265);
-  --accent: oklch(0.94 0.03 165);
-  --accent-foreground: oklch(0.32 0.08 165);
+  --secondary: oklch(0.96 0.01 255);
+  --secondary-foreground: oklch(0.28 0.03 255);
+  --muted: oklch(0.955 0.008 255);
+  --muted-foreground: oklch(0.5 0.02 255);
+  --accent: oklch(0.94 0.03 255);
+  --accent-foreground: oklch(0.3 0.08 255);
   --destructive: oklch(0.55 0.2 25);
   --destructive-foreground: oklch(0.99 0 0);
-  --border: oklch(0.91 0.012 265);
-  --input: oklch(0.91 0.012 265);
-  --ring: oklch(0.62 0.14 165);
-  --sidebar: oklch(0.99 0.004 265);
-  --sidebar-foreground: oklch(0.32 0.02 265);
-  --ticket: oklch(0.995 0.004 265);
+  --border: oklch(0.9 0.01 255);
+  --input: oklch(0.9 0.01 255);
+  --ring: oklch(0.52 0.18 255);
+  --sidebar: oklch(0.99 0.003 255);
+  --sidebar-foreground: oklch(0.28 0.02 255);
+  --ticket: oklch(1 0 0);
 }
 
 .dark {
-  --background: oklch(0.18 0.02 265);
+  --background: oklch(0.17 0.02 255);
   --foreground: oklch(0.96 0.01 95);
-  --card: oklch(0.22 0.02 265);
+  --card: oklch(0.21 0.02 255);
   --card-foreground: oklch(0.96 0.01 95);
-  --popover: oklch(0.22 0.02 265);
+  --popover: oklch(0.21 0.02 255);
   --popover-foreground: oklch(0.96 0.01 95);
-  --primary: oklch(0.7 0.13 165);
-  --primary-foreground: oklch(0.16 0.02 265);
-  --secondary: oklch(0.28 0.02 265);
+  --primary: oklch(0.62 0.17 255);
+  --primary-foreground: oklch(0.14 0.02 255);
+  --secondary: oklch(0.28 0.02 255);
   --secondary-foreground: oklch(0.96 0.01 95);
-  --muted: oklch(0.28 0.02 265);
-  --muted-foreground: oklch(0.7 0.02 265);
-  --accent: oklch(0.3 0.04 165);
-  --accent-foreground: oklch(0.9 0.04 165);
+  --muted: oklch(0.28 0.02 255);
+  --muted-foreground: oklch(0.7 0.02 255);
+  --accent: oklch(0.3 0.04 255);
+  --accent-foreground: oklch(0.9 0.04 255);
   --destructive: oklch(0.55 0.18 25);
   --destructive-foreground: oklch(0.99 0 0);
-  --border: oklch(0.32 0.02 265);
-  --input: oklch(0.32 0.02 265);
-  --ring: oklch(0.7 0.13 165);
-  --sidebar: oklch(0.2 0.02 265);
+  --border: oklch(0.32 0.02 255);
+  --input: oklch(0.32 0.02 255);
+  --ring: oklch(0.62 0.17 255);
+  --sidebar: oklch(0.19 0.02 255);
   --sidebar-foreground: oklch(0.96 0.01 95);
-  --ticket: oklch(0.24 0.02 265);
+  --ticket: oklch(0.23 0.02 255);
 }
 
-/* Pastel category tiles (daytime color chart from Vita) */
+/* Soft category accents (optional surfaces) */
 :root {
-  --pastel-1: oklch(0.92 0.04 250);
-  --pastel-2: oklch(0.93 0.035 220);
-  --pastel-3: oklch(0.93 0.04 180);
-  --pastel-4: oklch(0.94 0.04 145);
-  --pastel-5: oklch(0.93 0.05 80);
-  --pastel-6: oklch(0.93 0.05 40);
-  --pastel-7: oklch(0.93 0.05 20);
-  --pastel-8: oklch(0.93 0.04 330);
-  --pastel-9: oklch(0.93 0.04 300);
-  --pastel-10: oklch(0.93 0.035 280);
+  --pastel-1: oklch(0.94 0.03 250);
+  --pastel-2: oklch(0.94 0.025 220);
+  --pastel-3: oklch(0.94 0.03 180);
+  --pastel-4: oklch(0.95 0.03 145);
+  --pastel-5: oklch(0.94 0.04 80);
+  --pastel-6: oklch(0.94 0.04 40);
+  --pastel-7: oklch(0.94 0.04 20);
+  --pastel-8: oklch(0.94 0.03 330);
+  --pastel-9: oklch(0.94 0.03 300);
+  --pastel-10: oklch(0.94 0.025 280);
 }
 
 @layer base {

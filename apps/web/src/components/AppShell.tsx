@@ -1,6 +1,17 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
-import { Lock, Menu, Plus, Search, Wifi, WifiOff, X } from 'lucide-react'
+import {
+  Lock,
+  Menu,
+  Package,
+  Plus,
+  Receipt,
+  Search,
+  ShoppingBag,
+  Wifi,
+  WifiOff,
+  X,
+} from 'lucide-react'
 
 import { StaffPasscodeScreen } from '@/components/StaffPasscodeScreen'
 import { Badge } from '@/components/ui/badge'
@@ -13,22 +24,19 @@ import { cn } from '@/lib/utils'
 const nav = [
   {
     to: '/',
-    label: 'À la carte',
+    label: 'Checkout',
     end: true,
-    tint: 'bg-emerald-100 text-emerald-800',
-    letter: 'À',
+    icon: ShoppingBag,
   },
   {
     to: '/catalog',
-    label: 'Catalog',
-    tint: 'bg-violet-100 text-violet-800',
-    letter: 'C',
+    label: 'Items',
+    icon: Package,
   },
   {
     to: '/receipts',
-    label: 'Receipts',
-    tint: 'bg-sky-100 text-sky-800',
-    letter: 'R',
+    label: 'Transactions',
+    icon: Receipt,
   },
 ]
 
@@ -117,33 +125,31 @@ export function AppShell() {
   }, [staff])
 
   const isPos = location.pathname === '/'
-  const clockLabel = useMemo(
-    () => new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }),
-    [location.pathname],
-  )
 
   const accountName =
     user?.display_name?.trim() || user?.phone_e164 || 'Account'
   const accountInitials = initials(user?.display_name ?? user?.phone_e164, 'U')
 
   const pageTitle = isPos
-    ? 'À la carte'
+    ? 'Checkout'
     : location.pathname.startsWith('/catalog')
-      ? 'Catalog'
-      : 'Receipts'
+      ? 'Items'
+      : 'Transactions'
   const pageSubtitle = isPos
-    ? 'Items'
+    ? 'Sell items'
     : location.pathname.startsWith('/catalog')
       ? 'Products & categories'
       : 'Sales history'
 
   const outletName =
-    outlets.find((o) => o.id === outletId)?.name ?? 'All rooms'
+    outlets.find((o) => o.id === outletId)?.name ?? 'No outlet selected'
   const online = stats?.online !== false
+  const activeStaffName =
+    staff.find((s) => s.id === staffId)?.display_name ?? null
 
   return (
     <div className="flex h-svh overflow-hidden bg-background text-foreground">
-      {/* Left sidebar — Vita menus rail */}
+      {/* Left sidebar — Square-style navigation rail */}
       <aside
         className={cn(
           'flex shrink-0 flex-col border-r border-border bg-sidebar transition-[width] duration-200',
@@ -163,22 +169,26 @@ export function AppShell() {
             <div className="truncate text-[13px] font-semibold tracking-tight">
               {businessName}
             </div>
-            <div className="text-[11px] text-muted-foreground">Inventory</div>
+            <div className="truncate text-[11px] text-muted-foreground">
+              {outletName}
+            </div>
           </div>
         </div>
 
         <div className="flex items-center justify-between px-4 pb-2 pt-1">
           <div className="leading-tight">
-            <div className="text-[13px] font-semibold text-foreground">Menus</div>
+            <div className="text-[13px] font-semibold text-foreground">
+              Business
+            </div>
             <div className="text-[11px] text-muted-foreground">
-              {nav.length} menus
+              Scope & outlet
             </div>
           </div>
           <button
             type="button"
             className="flex size-7 items-center justify-center rounded-none border border-border text-muted-foreground hover:bg-muted"
-            aria-label="Add menu"
-            title="Business / outlet scope"
+            aria-label="Business and outlet"
+            title="Business / outlet"
             onClick={() => setScopeOpen((v) => !v)}
           >
             <Plus className="size-3.5" />
@@ -223,19 +233,18 @@ export function AppShell() {
           </div>
         ) : null}
 
-        <nav className="flex-1 space-y-1.5 overflow-y-auto px-2 pos-scroll">
-          {nav.map(({ to, label, tint, letter, end }) => (
+        <nav className="flex-1 space-y-1 overflow-y-auto px-2 pos-scroll">
+          {nav.map(({ to, label, icon: Icon, end }) => (
             <NavLink
               key={to}
               to={to}
               end={end}
               className={({ isActive }) =>
                 cn(
-                  // border-2 always — active only changes color/bg (no reflow)
                   'relative flex items-center gap-2.5 rounded-none border-2 px-2.5 py-2.5 text-sm transition-colors',
                   isActive
-                    ? 'border-emerald-500/70 bg-emerald-100/90 font-semibold text-emerald-950'
-                    : 'border-transparent font-medium hover:bg-muted/70',
+                    ? 'border-primary/60 bg-primary/10 font-semibold text-foreground'
+                    : 'border-transparent font-medium text-foreground/85 hover:bg-muted/70',
                 )
               }
             >
@@ -244,47 +253,23 @@ export function AppShell() {
                   <span
                     aria-hidden
                     className={cn(
-                      'absolute inset-y-0 left-0 w-1 bg-emerald-600 transition-opacity',
+                      'absolute inset-y-0 left-0 w-1 bg-primary transition-opacity',
                       isActive ? 'opacity-100' : 'opacity-0',
                     )}
                   />
                   <span
                     className={cn(
-                      'flex size-8 shrink-0 items-center justify-center rounded-none text-xs font-semibold',
-                      tint,
+                      'flex size-8 shrink-0 items-center justify-center',
+                      isActive
+                        ? 'bg-primary text-primary-foreground'
+                        : 'bg-muted text-muted-foreground',
                     )}
                   >
-                    {letter}
+                    <Icon className="size-4" />
                   </span>
                   <div className="min-w-0 flex-1 leading-tight">
                     <div className="truncate text-[13px] font-medium">
                       {label}
-                    </div>
-                    <div className="mt-0.5 flex items-center gap-1 text-[10px] text-muted-foreground">
-                      {to === '/' ? (
-                        <>
-                          <span
-                            className={cn(
-                              'size-1.5 rounded-none',
-                              online ? 'bg-emerald-500' : 'bg-amber-500',
-                            )}
-                          />
-                          <span
-                            className={
-                              online ? 'text-emerald-700' : 'text-amber-700'
-                            }
-                          >
-                            {online ? 'Online' : 'Offline'}
-                          </span>
-                        </>
-                      ) : (
-                        <>
-                          <span className="size-1.5 rounded-none bg-muted-foreground/40" />
-                          <span>Offline</span>
-                        </>
-                      )}
-                      <span className="text-muted-foreground/50">→</span>
-                      <span className="truncate">{outletName}</span>
                     </div>
                   </div>
                 </>
@@ -295,12 +280,9 @@ export function AppShell() {
 
         <div className="mt-auto border-t border-border px-4 py-4">
           <div className="text-sm font-semibold tracking-tight">
-            Muto<span className="font-normal text-muted-foreground"> POS</span>
+            Muto<span className="font-normal text-muted-foreground">POS</span>
           </div>
-          <p className="mt-1 text-[10px] leading-snug text-muted-foreground">
-            Help · Support · Legal
-          </p>
-          <div className="mt-2.5 flex items-center gap-1.5">
+          <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
             {(stats?.pending ?? 0) > 0 ? (
               <Badge variant="warning" className="text-[10px]">
                 Outbox {stats?.pending}
@@ -310,13 +292,13 @@ export function AppShell() {
                 Synced
               </Badge>
             )}
-            {stats?.online === false ? (
-              <Badge variant="warning" className="gap-1 text-[10px]">
-                <WifiOff className="size-3" /> Offline
+            {online ? (
+              <Badge variant="success" className="gap-1 text-[10px]">
+                <Wifi className="size-3" /> Online
               </Badge>
             ) : (
-              <Badge variant="success" className="gap-1 text-[10px]">
-                <Wifi className="size-3" /> Live
+              <Badge variant="warning" className="gap-1 text-[10px]">
+                <WifiOff className="size-3" /> Offline
               </Badge>
             )}
           </div>
@@ -348,7 +330,7 @@ export function AppShell() {
             </div>
           </div>
 
-          {/* Active staff + switch/lock — passcode required to switch (Square-style) */}
+          {/* Team chips — passcode required to switch (Square-style) */}
           <div className="hidden min-w-0 flex-1 items-center justify-center gap-2 overflow-x-auto md:flex pos-scroll">
             {floorStaff.map((s, i) => {
               const active = s.id === staffId
@@ -369,7 +351,7 @@ export function AppShell() {
                   className={cn(
                     'inline-flex shrink-0 items-center gap-1.5 rounded-none border-2 py-1 pl-1 pr-2.5 text-xs font-medium transition-colors',
                     active
-                      ? 'border-violet-500/70 bg-violet-200 text-violet-950'
+                      ? 'border-primary/70 bg-primary/15 text-foreground'
                       : 'border-transparent bg-transparent text-muted-foreground hover:bg-muted/80 hover:text-foreground',
                   )}
                 >
@@ -465,10 +447,12 @@ export function AppShell() {
               <div className="text-right leading-tight">
                 <div className="text-xs font-semibold">{accountName}</div>
                 <div className="text-[10px] text-muted-foreground">
-                  Clocked in {clockLabel}
+                  {activeStaffName
+                    ? `Cashier · ${shortName(activeStaffName)}`
+                    : 'Owner account'}
                 </div>
               </div>
-              <span className="flex size-8 items-center justify-center rounded-none bg-violet-100 text-xs font-semibold text-violet-800">
+              <span className="flex size-8 items-center justify-center rounded-none bg-primary/15 text-xs font-semibold text-primary">
                 {accountInitials.slice(0, 1)}
               </span>
             </button>

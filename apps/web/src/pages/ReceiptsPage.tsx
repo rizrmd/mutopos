@@ -60,9 +60,9 @@ export function ReceiptsPage() {
   return (
     <div className="mx-auto max-w-5xl space-y-5">
       <div>
-        <h1 className="text-xl font-bold tracking-tight">Receipts</h1>
+        <h1 className="text-xl font-bold tracking-tight">Transactions</h1>
         <p className="text-sm text-muted-foreground">
-          Server sales and local tickets (auto-synced).
+          Completed sales from the server and local device cache.
         </p>
       </div>
 
@@ -72,7 +72,7 @@ export function ReceiptsPage() {
 
       <Card>
         <CardHeader className="p-4 pb-2">
-          <CardTitle className="text-base">Server sales</CardTitle>
+          <CardTitle className="text-base">Synced sales</CardTitle>
         </CardHeader>
         <CardContent className="space-y-2 p-4 pt-2">
           {sales.map((s, i) => (
@@ -112,9 +112,9 @@ export function ReceiptsPage() {
 
       <Card>
         <CardHeader className="p-4 pb-2">
-          <CardTitle className="text-base">Local tickets</CardTitle>
+          <CardTitle className="text-base">On this device</CardTitle>
           <CardDescription>
-            Offline sales sync automatically when online.
+            Offline sales sync automatically when the device is online.
           </CardDescription>
         </CardHeader>
         <CardContent className="p-4 pt-2">

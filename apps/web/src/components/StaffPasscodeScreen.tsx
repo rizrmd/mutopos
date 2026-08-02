@@ -185,8 +185,7 @@ export function StaffPasscodeScreen({
               Who&apos;s clocking in?
             </h1>
             <p className="mb-8 max-w-md text-center text-sm text-white/55">
-              Select your name, then enter your passcode — like Square Team
-              passcodes.
+              Select your name, then enter your 4-digit passcode.
             </p>
             <div className="grid w-full max-w-2xl grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
               {floor.map((s, i) => (
@@ -317,7 +316,7 @@ export function StaffPasscodeScreen({
             </div>
 
             <p className="mt-8 text-center text-[11px] text-white/35">
-              Demo passcode for sample cashiers: 1234
+              Ask an owner if you need a passcode reset.
             </p>
           </div>
         )}

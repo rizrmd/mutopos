@@ -118,9 +118,9 @@ export function CatalogPage() {
   return (
     <div className="mx-auto max-w-5xl space-y-5">
       <div>
-        <h1 className="text-xl font-bold tracking-tight">Catalog</h1>
+        <h1 className="text-xl font-bold tracking-tight">Items</h1>
         <p className="text-sm text-muted-foreground">
-          Categories and products for this business.
+          Products and categories available at checkout.
         </p>
       </div>
 
@@ -179,7 +179,9 @@ export function CatalogPage() {
         <Card>
           <CardHeader className="p-4 pb-2">
             <CardTitle className="text-base">Add category</CardTitle>
-            <CardDescription>Shown as tiles on the POS menu.</CardDescription>
+            <CardDescription>
+              Shown as filters on the checkout library.
+            </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3 p-4 pt-2">
             <Input
