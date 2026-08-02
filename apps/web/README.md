@@ -1,42 +1,31 @@
 # MutoPOS Web (`apps/web`)
 
-Vite + React + TypeScript + **shadcn/ui** (Tailwind v4) shell for the POS client.
+Vite + React + TypeScript + shadcn/ui + **RxDB** custom outbox client.
 
-Offline store (RxDB) and custom outbox are **not** wired in this scaffold — see [`docs/architecture/`](../../docs/architecture/).
-
-## Requirements
-
-- Node.js 20+ (scaffold uses Node 24 / npm)
-
-## Quick start
+## Run
 
 ```bash
 cd apps/web
 npm install
-npm run dev
-```
-
-Open http://127.0.0.1:5173
-
-Build:
-
-```bash
+npm run dev      # http://127.0.0.1:5173
 npm run build
-npm run preview
 ```
 
-## shadcn/ui
+API must be running on `:8080` (or set `VITE_API_BASE` to a full API origin). Dev proxy: `/api` → `http://127.0.0.1:8080`.
 
-Configured via [`components.json`](./components.json). Path alias `@/*` → `src/*`.
+## Features
 
-Add components (example):
+| Screen | Path | Notes |
+|--------|------|--------|
+| Login | `/login` | WA OTP stub |
+| POS | `/` | Online sale + outbox sale |
+| Catalog | `/catalog` | Product/category CRUD; caches to RxDB |
+| Receipts | `/receipts` | Server list + local RxDB sales |
 
-```bash
-npx shadcn@latest add input dialog
-```
+## Offline / outbox
 
-Scaffold includes `Button` and `Card` under `src/components/ui/`.
+See root [README — Offline outbox](../../README.md#offline-outbox-rxdb--go).
 
-## Dev proxy
-
-Vite proxies `/api/*` → `http://127.0.0.1:8080/*` so the UI can call the Go API without CORS during local development.
+- `src/lib/db.ts` — RxDB (Dexie storage): `outbox`, `products`, `sales`, `meta`
+- `src/lib/outbox.ts` — worker pushes `POST /v1/commands`
+- POS **Force outbox** / offline → local write then sync

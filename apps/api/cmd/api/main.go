@@ -56,13 +56,13 @@ func run(migrateOnly bool) error {
 		return nil
 	}
 
-	srv := httpapi.New(pool)
+	srv := httpapi.New(pool, cfg)
 	httpServer := &http.Server{
 		Addr:              cfg.HTTPAddr,
 		Handler:           srv.Handler(),
 		ReadHeaderTimeout: 5 * time.Second,
-		ReadTimeout:       15 * time.Second,
-		WriteTimeout:      30 * time.Second,
+		ReadTimeout:       30 * time.Second,
+		WriteTimeout:      60 * time.Second,
 		IdleTimeout:       60 * time.Second,
 	}
 

@@ -19,6 +19,15 @@ type Config struct {
 	AutoMigrate bool
 	// Env is a free-form environment label (development, production, …).
 	Env string
+	// SessionSecret salts session token hashing (any long string).
+	SessionSecret string
+	// OTPStubCode is the fixed OTP accepted in development when non-empty.
+	// When empty, a random code is generated (still logged; WA send is stubbed).
+	OTPStubCode string
+	// OTPTTLMinutes is challenge lifetime.
+	OTPTTLMinutes int
+	// SessionTTLHours is bearer session lifetime.
+	SessionTTLHours int
 }
 
 // Load reads optional .env files then environment variables.
@@ -29,10 +38,14 @@ func Load() (Config, error) {
 	_ = godotenv.Load()
 
 	cfg := Config{
-		HTTPAddr:    getEnv("HTTP_ADDR", ":8080"),
-		DatabaseURL: strings.TrimSpace(os.Getenv("DATABASE_URL")),
-		AutoMigrate: getEnvBool("AUTO_MIGRATE", true),
-		Env:         getEnv("APP_ENV", "development"),
+		HTTPAddr:        getEnv("HTTP_ADDR", ":8080"),
+		DatabaseURL:     strings.TrimSpace(os.Getenv("DATABASE_URL")),
+		AutoMigrate:     getEnvBool("AUTO_MIGRATE", true),
+		Env:             getEnv("APP_ENV", "development"),
+		SessionSecret:   getEnv("SESSION_SECRET", "mutopos-dev-session-secret"),
+		OTPStubCode:     getEnv("OTP_STUB_CODE", "000000"),
+		OTPTTLMinutes:   getEnvInt("OTP_TTL_MINUTES", 10),
+		SessionTTLHours: getEnvInt("SESSION_TTL_HOURS", 24*14),
 	}
 
 	if cfg.DatabaseURL == "" {
@@ -59,4 +72,16 @@ func getEnvBool(key string, fallback bool) bool {
 		return fallback
 	}
 	return b
+}
+
+func getEnvInt(key string, fallback int) int {
+	v := strings.TrimSpace(os.Getenv(key))
+	if v == "" {
+		return fallback
+	}
+	n, err := strconv.Atoi(v)
+	if err != nil {
+		return fallback
+	}
+	return n
 }
