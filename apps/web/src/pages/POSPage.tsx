@@ -481,39 +481,26 @@ export function POSPage() {
                   aria-pressed={active}
                   onClick={() => setSelectedCategory(tile.id)}
                   className={cn(
-                    'relative min-h-[4.75rem] rounded-none px-4 py-3.5 text-left transition-all',
+                    // Always border-2 so active/idle never reflow the grid
+                    'relative min-h-[4.75rem] rounded-none border-2 px-4 py-3.5 text-left transition-colors',
                     tile.pastel,
                     active
-                      ? 'z-[1] shadow-md ring-2 ring-foreground/55 brightness-[0.97]'
-                      : 'ring-1 ring-transparent hover:brightness-[0.97] hover:ring-foreground/10',
+                      ? 'z-[1] border-foreground/70 brightness-[0.97]'
+                      : 'border-transparent hover:border-foreground/15 hover:brightness-[0.97]',
                   )}
                 >
-                  {active ? (
-                    <span
-                      aria-hidden
-                      className="absolute inset-x-0 top-0 h-1 bg-foreground/70"
-                    />
-                  ) : null}
-                  <div
+                  <span
+                    aria-hidden
                     className={cn(
-                      'text-[15px] tracking-tight',
-                      active
-                        ? 'font-bold text-foreground'
-                        : 'font-semibold text-foreground/90',
+                      'absolute inset-x-0 top-0 h-1 transition-opacity',
+                      active ? 'bg-foreground/75 opacity-100' : 'opacity-0',
                     )}
-                  >
+                  />
+                  <div className="text-[15px] font-semibold tracking-tight text-foreground/90">
                     {tile.name}
                   </div>
-                  <div
-                    className={cn(
-                      'mt-1.5 text-[12px]',
-                      active
-                        ? 'font-medium text-foreground/65'
-                        : 'text-foreground/50',
-                    )}
-                  >
+                  <div className="mt-1.5 text-[12px] text-foreground/50">
                     {tile.count} item{tile.count === 1 ? '' : 's'}
-                    {active ? ' · selected' : ''}
                   </div>
                 </button>
               )
@@ -533,37 +520,24 @@ export function POSPage() {
                   key={p.id}
                   data-selected={selected ? 'true' : undefined}
                   className={cn(
-                    'relative flex min-h-[5.5rem] flex-col rounded-none border bg-card px-3 py-2.5 transition',
+                    // border-2 always — only color/bg change when in ticket
+                    'relative flex min-h-[5.5rem] flex-col rounded-none border-2 bg-card px-3 py-2.5 shadow-sm transition-colors',
                     selected
-                      ? 'border-primary bg-primary/5 shadow-md ring-2 ring-primary/45'
-                      : 'border-border shadow-sm hover:border-foreground/15',
+                      ? 'border-primary bg-primary/5'
+                      : 'border-border hover:border-foreground/20',
                   )}
                 >
-                  {selected ? (
-                    <span
-                      className="absolute left-0 top-0 z-[1] bg-primary px-1.5 py-0.5 text-[10px] font-bold tabular-nums text-primary-foreground"
-                      aria-label={`${qty} in ticket`}
-                    >
-                      ×{qty}
-                    </span>
-                  ) : null}
                   <button
                     type="button"
                     onClick={() => addToCart(p)}
-                    className="flex flex-1 flex-col pr-7 text-left"
+                    className="flex flex-1 flex-col pr-14 text-left"
                   >
-                    <div
-                      className={cn(
-                        'text-[13px] leading-snug text-foreground',
-                        selected ? 'font-bold' : 'font-semibold',
-                        selected && 'pt-3',
-                      )}
-                    >
+                    <div className="text-[13px] font-semibold leading-snug text-foreground">
                       {p.name}
                     </div>
                     <div
                       className={cn(
-                        'mt-0.5 text-[13px] tabular-nums',
+                        'mt-0.5 text-[13px] tabular-nums transition-colors',
                         selected
                           ? 'font-semibold text-primary'
                           : 'text-muted-foreground',
@@ -573,7 +547,7 @@ export function POSPage() {
                     </div>
                     <div
                       className={cn(
-                        'mt-auto flex items-center gap-1 pt-2 text-[10px]',
+                        'mt-auto flex items-center gap-1 pt-2 text-[10px] transition-colors',
                         selected
                           ? 'font-medium text-primary/80'
                           : 'text-muted-foreground/65',
@@ -585,13 +559,13 @@ export function POSPage() {
                     </div>
                   </button>
 
-                  {/* + always top-right */}
+                  {/* + always top-right (fixed position — no reflow) */}
                   <button
                     type="button"
                     aria-label={`Add ${p.name}`}
                     onClick={() => addToCart(p)}
                     className={cn(
-                      'absolute right-2 top-2 flex size-6 items-center justify-center rounded-none transition',
+                      'absolute right-2 top-2 flex size-6 items-center justify-center rounded-none transition-colors',
                       selected
                         ? 'bg-primary text-primary-foreground hover:bg-primary/90'
                         : 'text-muted-foreground hover:bg-muted hover:text-foreground',
@@ -599,6 +573,19 @@ export function POSPage() {
                   >
                     <Plus className="size-3.5 stroke-[2.5]" />
                   </button>
+                  {/* qty sits left of +; absolute so it never shifts layout */}
+                  <span
+                    className={cn(
+                      'pointer-events-none absolute right-9 top-2 flex h-6 min-w-6 items-center justify-center px-1 text-[10px] font-bold tabular-nums transition-opacity',
+                      selected
+                        ? 'bg-primary/15 text-primary opacity-100'
+                        : 'opacity-0',
+                    )}
+                    aria-hidden={!selected}
+                    aria-label={selected ? `${qty} in ticket` : undefined}
+                  >
+                    ×{qty || 1}
+                  </span>
 
                   {/* − always bottom-right (Vita stepper layout) */}
                   <button
@@ -607,7 +594,7 @@ export function POSPage() {
                     disabled={qty === 0}
                     onClick={() => changeQty(p.id, -1)}
                     className={cn(
-                      'absolute bottom-2 right-2 flex size-6 items-center justify-center rounded-none transition',
+                      'absolute bottom-2 right-2 flex size-6 items-center justify-center rounded-none transition-colors',
                       selected
                         ? 'text-primary hover:bg-primary/10'
                         : 'text-muted-foreground/30',

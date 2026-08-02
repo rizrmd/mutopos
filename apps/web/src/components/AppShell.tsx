@@ -204,37 +204,33 @@ export function AppShell() {
               end={end}
               className={({ isActive }) =>
                 cn(
-                  'relative flex items-center gap-2.5 rounded-none px-2.5 py-2.5 text-sm transition-colors',
+                  // border-2 always — active only changes color/bg (no reflow)
+                  'relative flex items-center gap-2.5 rounded-none border-2 px-2.5 py-2.5 text-sm transition-colors',
                   isActive
-                    ? 'bg-emerald-100/90 font-semibold text-emerald-950 shadow-sm ring-2 ring-emerald-500/55'
-                    : 'hover:bg-muted/70',
+                    ? 'border-emerald-500/70 bg-emerald-100/90 font-semibold text-emerald-950'
+                    : 'border-transparent font-medium hover:bg-muted/70',
                 )
               }
             >
               {({ isActive }) => (
                 <>
-                  {isActive ? (
-                    <span
-                      aria-hidden
-                      className="absolute inset-y-0 left-0 w-1 bg-emerald-600"
-                    />
-                  ) : null}
+                  <span
+                    aria-hidden
+                    className={cn(
+                      'absolute inset-y-0 left-0 w-1 bg-emerald-600 transition-opacity',
+                      isActive ? 'opacity-100' : 'opacity-0',
+                    )}
+                  />
                   <span
                     className={cn(
                       'flex size-8 shrink-0 items-center justify-center rounded-none text-xs font-semibold',
                       tint,
-                      isActive && 'ring-1 ring-emerald-600/30',
                     )}
                   >
                     {letter}
                   </span>
                   <div className="min-w-0 flex-1 leading-tight">
-                    <div
-                      className={cn(
-                        'truncate text-[13px]',
-                        isActive ? 'font-bold' : 'font-medium',
-                      )}
-                    >
+                    <div className="truncate text-[13px] font-medium">
                       {label}
                     </div>
                     <div className="mt-0.5 flex items-center gap-1 text-[10px] text-muted-foreground">
@@ -336,17 +332,17 @@ export function AppShell() {
                   aria-pressed={active}
                   onClick={() => setStaffId(s.id)}
                   className={cn(
-                    'inline-flex shrink-0 items-center gap-1.5 rounded-none py-1 pl-1 pr-2.5 text-xs transition-colors',
+                    // border-2 always — active only changes color/bg
+                    'inline-flex shrink-0 items-center gap-1.5 rounded-none border-2 py-1 pl-1 pr-2.5 text-xs font-medium transition-colors',
                     active
-                      ? 'bg-violet-200 font-bold text-violet-950 shadow-sm ring-2 ring-violet-500/60'
-                      : 'bg-transparent font-medium text-muted-foreground hover:bg-muted/80 hover:text-foreground',
+                      ? 'border-violet-500/70 bg-violet-200 text-violet-950'
+                      : 'border-transparent bg-transparent text-muted-foreground hover:bg-muted/80 hover:text-foreground',
                   )}
                 >
                   <span
                     className={cn(
                       'flex size-6 items-center justify-center rounded-none text-[10px] font-semibold',
                       avatarTints[i % avatarTints.length],
-                      active && 'ring-1 ring-violet-600/40',
                     )}
                   >
                     {initials(s.display_name).slice(0, 1)}
