@@ -12,6 +12,15 @@ import {
 import { api, formatIDR, type Sale } from '@/lib/api'
 import { getDb } from '@/lib/db'
 import { useSession } from '@/lib/session'
+import { cn } from '@/lib/utils'
+
+const TICKET_TINTS = [
+  'bg-emerald-500',
+  'bg-rose-500',
+  'bg-amber-400',
+  'bg-sky-500',
+  'bg-violet-500',
+]
 
 export function ReceiptsPage() {
   const { tenant, businessId } = useSession()
@@ -48,71 +57,99 @@ export function ReceiptsPage() {
   }, [load])
 
   return (
-    <div className="space-y-6">
+    <div className="mx-auto max-w-5xl space-y-6">
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Receipts</h1>
         <p className="text-sm text-muted-foreground">
-          Server sales plus local RxDB sale documents (synced flag).
+          Server sales plus local RxDB tickets (synced flag).
         </p>
       </div>
 
       {error ? <p className="text-sm text-destructive">{error}</p> : null}
 
-      <Card>
+      <Card className="rounded-2xl shadow-sm">
         <CardHeader>
           <CardTitle className="text-base">Server sales</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="space-y-2">
-            {sales.map((s) => (
+            {sales.map((s, i) => (
               <Link
                 key={s.id}
                 to={`/receipts/${s.id}`}
-                className="flex items-center justify-between rounded-lg border px-3 py-2 text-sm hover:bg-accent/40"
+                className="flex items-center gap-3 rounded-2xl border border-border px-3 py-2.5 text-sm transition hover:bg-muted/50"
               >
-                <div>
+                <span
+                  className={cn(
+                    'flex size-9 shrink-0 items-center justify-center rounded-xl text-[10px] font-bold text-white',
+                    TICKET_TINTS[i % TICKET_TINTS.length],
+                  )}
+                >
+                  {(s.receipt_no ?? s.id).slice(0, 2).toUpperCase()}
+                </span>
+                <div className="min-w-0 flex-1">
                   <div className="font-medium">
                     {s.receipt_no ?? s.id.slice(0, 8)}
                   </div>
-                  <div className="text-muted-foreground">
+                  <div className="text-xs text-muted-foreground">
                     {s.status} · {s.completed_at ?? s.created_at}
                   </div>
                 </div>
-                <div className="font-semibold">{formatIDR(s.total_minor)}</div>
+                <div className="font-semibold tabular-nums">
+                  {formatIDR(s.total_minor)}
+                </div>
               </Link>
             ))}
             {sales.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No server sales yet.</p>
+              <p className="py-6 text-center text-sm text-muted-foreground">
+                No server sales yet.
+              </p>
             ) : null}
           </div>
         </CardContent>
       </Card>
 
-      <Card>
+      <Card className="rounded-2xl shadow-sm">
         <CardHeader>
-          <CardTitle className="text-base">Local sales (RxDB)</CardTitle>
-          <CardDescription>Includes offline / outbox-pending tickets.</CardDescription>
+          <CardTitle className="text-base">Local tickets (RxDB)</CardTitle>
+          <CardDescription>
+            Includes offline / outbox-pending tickets — same strip as POS.
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <ul className="space-y-2 text-sm">
-            {localPending.map((s) => (
+            {localPending.map((s, i) => (
               <li
                 key={s.id}
-                className="flex justify-between rounded-lg border px-3 py-2"
+                className="flex items-center gap-3 rounded-2xl border border-border px-3 py-2.5"
               >
-                <span>
-                  {s.id.slice(0, 8)}… ·{' '}
-                  {s.synced ? (
-                    <span className="text-primary">synced</span>
-                  ) : (
-                    <span className="text-amber-700">pending sync</span>
+                <span
+                  className={cn(
+                    'flex size-9 shrink-0 items-center justify-center rounded-xl text-[10px] font-bold text-white',
+                    TICKET_TINTS[i % TICKET_TINTS.length],
                   )}
+                >
+                  {s.id.slice(0, 2).toUpperCase()}
                 </span>
-                <span>{formatIDR(s.totalMinor)}</span>
+                <div className="min-w-0 flex-1">
+                  <div className="font-medium">{s.id.slice(0, 8)}…</div>
+                  <div className="text-xs">
+                    {s.synced ? (
+                      <span className="text-emerald-700">Ready · synced</span>
+                    ) : (
+                      <span className="text-amber-700">In progress · pending sync</span>
+                    )}
+                  </div>
+                </div>
+                <span className="font-semibold tabular-nums">
+                  {formatIDR(s.totalMinor)}
+                </span>
               </li>
             ))}
             {localPending.length === 0 ? (
-              <li className="text-muted-foreground">No local sales cached.</li>
+              <li className="py-6 text-center text-muted-foreground">
+                No local sales cached.
+              </li>
             ) : null}
           </ul>
         </CardContent>
@@ -144,10 +181,10 @@ export function ReceiptDetailPage() {
 
   return (
     <div className="mx-auto max-w-lg space-y-4">
-      <Button variant="outline" size="sm" asChild>
+      <Button variant="outline" size="sm" className="rounded-xl" asChild>
         <Link to="/receipts">← Back</Link>
       </Button>
-      <Card>
+      <Card className="rounded-2xl shadow-sm">
         <CardHeader>
           <CardTitle>Receipt {sale.receipt_no ?? sale.id.slice(0, 8)}</CardTitle>
           <CardDescription>
@@ -155,19 +192,26 @@ export function ReceiptDetailPage() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3 text-sm">
-          <ul className="space-y-1">
+          <ul className="space-y-2">
             {(sale.lines ?? []).map((l, i) => (
-              <li key={l.id ?? i} className="flex justify-between">
-                <span>
-                  {l.name_snapshot} × {l.qty}
+              <li key={l.id ?? i} className="flex justify-between gap-3">
+                <span className="flex gap-2">
+                  <span className="w-4 text-xs text-muted-foreground">
+                    {i + 1}
+                  </span>
+                  <span>
+                    {l.name_snapshot} × {l.qty}
+                  </span>
                 </span>
-                <span>{formatIDR(l.line_total_minor)}</span>
+                <span className="tabular-nums font-medium">
+                  {formatIDR(l.line_total_minor)}
+                </span>
               </li>
             ))}
           </ul>
-          <div className="border-t pt-2 font-semibold flex justify-between">
+          <div className="flex justify-between border-t pt-3 text-base font-semibold">
             <span>Total</span>
-            <span>{formatIDR(sale.total_minor)}</span>
+            <span className="tabular-nums">{formatIDR(sale.total_minor)}</span>
           </div>
           <div className="text-muted-foreground">
             Payments:{' '}

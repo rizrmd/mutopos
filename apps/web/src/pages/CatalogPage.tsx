@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { Plus } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import {
@@ -12,6 +13,18 @@ import { Input } from '@/components/ui/input'
 import { api, formatIDR, type Category, type Product } from '@/lib/api'
 import { cacheProducts } from '@/lib/db'
 import { useSession } from '@/lib/session'
+import { cn } from '@/lib/utils'
+
+const PASTELS = [
+  'bg-[var(--pastel-6)]',
+  'bg-[var(--pastel-1)]',
+  'bg-[var(--pastel-9)]',
+  'bg-[var(--pastel-7)]',
+  'bg-[var(--pastel-3)]',
+  'bg-[var(--pastel-8)]',
+  'bg-[var(--pastel-5)]',
+  'bg-[var(--pastel-2)]',
+]
 
 export function CatalogPage() {
   const { tenant, businessId } = useSession()
@@ -77,60 +90,100 @@ export function CatalogPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="mx-auto max-w-5xl space-y-6">
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Catalog</h1>
         <p className="text-sm text-muted-foreground">
-          Products and categories for this business (online CRUD). Cached in
-          RxDB for offline POS.
+          Menus, categories and products — cached in RxDB for offline POS.
         </p>
       </div>
 
+      {/* Category pastel chips */}
+      {categories.length > 0 ? (
+        <div className="flex flex-wrap gap-2">
+          {categories.map((c, i) => (
+            <span
+              key={c.id}
+              className={cn(
+                'rounded-2xl px-3 py-2 text-sm font-medium',
+                PASTELS[i % PASTELS.length],
+              )}
+            >
+              {c.name}
+            </span>
+          ))}
+        </div>
+      ) : null}
+
       <div className="grid gap-4 lg:grid-cols-2">
-        <Card>
+        <Card className="rounded-2xl shadow-sm">
           <CardHeader>
             <CardTitle className="text-base">Add product</CardTitle>
-            <CardDescription>Default price in IDR minor units (rupiah).</CardDescription>
+            <CardDescription>
+              Default price in IDR minor units (rupiah).
+            </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
             <Input
               placeholder="Name"
               value={name}
               onChange={(e) => setName(e.target.value)}
+              className="h-10 rounded-xl"
             />
             <Input
               placeholder="SKU (optional)"
               value={sku}
               onChange={(e) => setSku(e.target.value)}
+              className="h-10 rounded-xl"
             />
             <Input
               placeholder="Price (IDR)"
               type="number"
               value={price}
               onChange={(e) => setPrice(e.target.value)}
+              className="h-10 rounded-xl"
             />
-            <Button type="button" disabled={busy || !name} onClick={() => void addProduct()}>
+            <Button
+              type="button"
+              className="rounded-xl"
+              disabled={busy || !name}
+              onClick={() => void addProduct()}
+            >
+              <Plus className="size-4" />
               Create product
             </Button>
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="rounded-2xl shadow-sm">
           <CardHeader>
             <CardTitle className="text-base">Add category</CardTitle>
+            <CardDescription>
+              Categories become pastel tiles on the POS menu.
+            </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
             <Input
               placeholder="Category name"
               value={catName}
               onChange={(e) => setCatName(e.target.value)}
+              className="h-10 rounded-xl"
             />
-            <Button type="button" disabled={busy || !catName} onClick={() => void addCategory()}>
+            <Button
+              type="button"
+              className="rounded-xl"
+              disabled={busy || !catName}
+              onClick={() => void addCategory()}
+            >
+              <Plus className="size-4" />
               Create category
             </Button>
-            <ul className="text-sm text-muted-foreground">
+            <ul className="space-y-1.5 text-sm text-muted-foreground">
               {categories.map((c) => (
-                <li key={c.id}>• {c.name}</li>
+                <li key={c.id} className="flex items-center gap-2">
+                  <span className="size-1.5 rounded-full bg-primary" />
+                  {c.name}
+                </li>
               ))}
               {categories.length === 0 ? <li>No categories yet</li> : null}
             </ul>
@@ -140,39 +193,40 @@ export function CatalogPage() {
 
       {error ? <p className="text-sm text-destructive">{error}</p> : null}
 
-      <Card>
+      <Card className="rounded-2xl shadow-sm">
         <CardHeader>
-          <CardTitle className="text-base">Products ({products.length})</CardTitle>
+          <CardTitle className="text-base">
+            Products ({products.length})
+          </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
-              <thead className="border-b text-muted-foreground">
-                <tr>
-                  <th className="py-2 pr-3 font-medium">Name</th>
-                  <th className="py-2 pr-3 font-medium">SKU</th>
-                  <th className="py-2 pr-3 font-medium">Price</th>
-                  <th className="py-2 font-medium">Active</th>
-                </tr>
-              </thead>
-              <tbody>
-                {products.map((p) => (
-                  <tr key={p.id} className="border-b last:border-0">
-                    <td className="py-2 pr-3">{p.name}</td>
-                    <td className="py-2 pr-3 text-muted-foreground">{p.sku ?? '—'}</td>
-                    <td className="py-2 pr-3">{formatIDR(p.price_minor ?? 0)}</td>
-                    <td className="py-2">{p.is_active ? 'yes' : 'no'}</td>
-                  </tr>
-                ))}
-                {products.length === 0 ? (
-                  <tr>
-                    <td colSpan={4} className="py-4 text-muted-foreground">
-                      No products — add one to start selling.
-                    </td>
-                  </tr>
-                ) : null}
-              </tbody>
-            </table>
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+            {products.map((p) => (
+              <div
+                key={p.id}
+                className="rounded-2xl border border-border bg-card p-3 shadow-sm"
+              >
+                <div className="font-medium">{p.name}</div>
+                <div className="mt-0.5 text-sm text-muted-foreground">
+                  {formatIDR(p.price_minor ?? 0)}
+                </div>
+                <div className="mt-2 flex items-center justify-between text-[11px] text-muted-foreground">
+                  <span>{p.sku ?? 'No SKU'}</span>
+                  <span
+                    className={
+                      p.is_active ? 'text-emerald-700' : 'text-amber-700'
+                    }
+                  >
+                    {p.is_active ? 'Active' : 'Inactive'}
+                  </span>
+                </div>
+              </div>
+            ))}
+            {products.length === 0 ? (
+              <p className="col-span-full py-8 text-center text-sm text-muted-foreground">
+                No products — add one to start selling.
+              </p>
+            ) : null}
           </div>
         </CardContent>
       </Card>
