@@ -32,8 +32,8 @@
 
 /* Vita POS daytime mode — soft greys, pastel surfaces, teal primary */
 :root {
-  --radius: 0.75rem;
-  --background: oklch(0.965 0.008 260);
+  --radius: 0.875rem;
+  --background: oklch(0.97 0.006 260);
   --foreground: oklch(0.28 0.02 265);
   --card: oklch(1 0 0);
   --card-foreground: oklch(0.28 0.02 265);

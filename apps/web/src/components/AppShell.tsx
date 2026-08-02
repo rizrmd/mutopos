@@ -1,14 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
-import {
-  LayoutGrid,
-  Menu,
-  Receipt,
-  Search,
-  ShoppingCart,
-  Wifi,
-  WifiOff,
-} from 'lucide-react'
+import { Menu, Plus, Search, Wifi, WifiOff, X } from 'lucide-react'
 
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -18,9 +10,25 @@ import { useSession } from '@/lib/session'
 import { cn } from '@/lib/utils'
 
 const nav = [
-  { to: '/', label: 'POS', icon: ShoppingCart, end: true },
-  { to: '/catalog', label: 'Catalog', icon: LayoutGrid },
-  { to: '/receipts', label: 'Receipts', icon: Receipt },
+  {
+    to: '/',
+    label: 'À la carte',
+    end: true,
+    tint: 'bg-emerald-100 text-emerald-800',
+    letter: 'À',
+  },
+  {
+    to: '/catalog',
+    label: 'Catalog',
+    tint: 'bg-violet-100 text-violet-800',
+    letter: 'C',
+  },
+  {
+    to: '/receipts',
+    label: 'Receipts',
+    tint: 'bg-sky-100 text-sky-800',
+    letter: 'R',
+  },
 ]
 
 const avatarTints = [
@@ -37,6 +45,12 @@ function initials(name: string | null | undefined, fallback = '?') {
   const parts = name.trim().split(/\s+/)
   if (parts.length === 1) return parts[0].slice(0, 1).toUpperCase()
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
+}
+
+function shortName(name: string) {
+  const parts = name.trim().split(/\s+/)
+  if (parts.length === 1) return parts[0]
+  return `${parts[0]} ${parts[parts.length - 1][0]}.`
 }
 
 export function AppShell() {
@@ -56,6 +70,8 @@ export function AppShell() {
   const [stats, setStats] = useState<OutboxStats | null>(null)
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [search, setSearch] = useState('')
+  const [searchOpen, setSearchOpen] = useState(false)
+  const [scopeOpen, setScopeOpen] = useState(false)
   const location = useLocation()
 
   useEffect(() => subscribeOutbox(setStats), [])
@@ -67,7 +83,6 @@ export function AppShell() {
     [memberships, businessId],
   )
 
-  // Floor staff chips (cashiers) — exclude manager/account identity when both exist
   const floorStaff = useMemo(() => {
     const cashiers = staff.filter((s) => s.role === 'cashier')
     if (cashiers.length > 0) return cashiers
@@ -80,7 +95,6 @@ export function AppShell() {
     [location.pathname],
   )
 
-  // Signed-in account (Vita: "David Ross") — never mirror selected staff chip
   const accountName =
     user?.display_name?.trim() || user?.phone_e164 || 'Account'
   const accountInitials = initials(user?.display_name ?? user?.phone_e164, 'U')
@@ -91,10 +105,14 @@ export function AppShell() {
       ? 'Catalog'
       : 'Receipts'
   const pageSubtitle = isPos
-    ? 'Items · tap to order'
+    ? 'Items'
     : location.pathname.startsWith('/catalog')
       ? 'Products & categories'
       : 'Sales history'
+
+  const outletName =
+    outlets.find((o) => o.id === outletId)?.name ?? 'All rooms'
+  const online = stats?.online !== false
 
   return (
     <div className="flex h-svh overflow-hidden bg-background text-foreground">
@@ -102,10 +120,10 @@ export function AppShell() {
       <aside
         className={cn(
           'flex shrink-0 flex-col border-r border-border bg-sidebar transition-[width] duration-200',
-          sidebarOpen ? 'w-[15.5rem]' : 'w-0 overflow-hidden border-r-0',
+          sidebarOpen ? 'w-[15rem]' : 'w-0 overflow-hidden border-r-0',
         )}
       >
-        <div className="flex items-start gap-2 border-b border-border px-4 py-4">
+        <div className="flex items-start gap-2.5 px-3.5 pb-3 pt-4">
           <button
             type="button"
             className="mt-0.5 rounded-md p-1 text-muted-foreground hover:bg-muted"
@@ -115,92 +133,121 @@ export function AppShell() {
             <Menu className="size-4" />
           </button>
           <div className="min-w-0">
-            <div className="truncate text-sm font-semibold tracking-tight">
+            <div className="truncate text-[13px] font-semibold tracking-tight">
               {businessName}
             </div>
-            <div className="text-xs text-muted-foreground">Inventory · POS</div>
+            <div className="text-[11px] text-muted-foreground">Inventory</div>
           </div>
         </div>
 
-        <div className="space-y-2 border-b border-border px-3 py-3">
-          <label className="block text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-            Business
-          </label>
-          <select
-            className="h-9 w-full rounded-lg border border-border bg-card px-2 text-sm"
-            value={businessId ?? ''}
-            onChange={(e) => setBusinessId(e.target.value)}
-            aria-label="Business"
+        <div className="flex items-center justify-between px-4 pb-2 pt-1">
+          <div className="leading-tight">
+            <div className="text-[13px] font-semibold text-foreground">Menus</div>
+            <div className="text-[11px] text-muted-foreground">
+              {nav.length} menus
+            </div>
+          </div>
+          <button
+            type="button"
+            className="flex size-7 items-center justify-center rounded-lg border border-border text-muted-foreground hover:bg-muted"
+            aria-label="Add menu"
+            title="Business / outlet scope"
+            onClick={() => setScopeOpen((v) => !v)}
           >
-            {memberships.map((m) => (
-              <option key={m.business_id} value={m.business_id}>
-                {m.business_name}
-              </option>
-            ))}
-          </select>
-          <label className="block text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-            Outlet
-          </label>
-          <select
-            className="h-9 w-full rounded-lg border border-border bg-card px-2 text-sm"
-            value={outletId ?? ''}
-            onChange={(e) => setOutletId(e.target.value)}
-            aria-label="Outlet"
-          >
-            <option value="" disabled>
-              Select outlet
-            </option>
-            {outlets.map((o) => (
-              <option key={o.id} value={o.id}>
-                {o.name}
-              </option>
-            ))}
-          </select>
+            <Plus className="size-3.5" />
+          </button>
         </div>
 
-        <div className="flex items-center justify-between px-4 py-3">
-          <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            Menus
-          </span>
-          <span className="text-xs text-muted-foreground">
-            {nav.length} areas
-          </span>
-        </div>
+        {scopeOpen ? (
+          <div className="mx-2 mb-2 space-y-2 rounded-xl border border-border bg-card p-2.5">
+            <label className="block text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+              Business
+            </label>
+            <select
+              className="h-8 w-full rounded-lg border border-border bg-background px-2 text-xs"
+              value={businessId ?? ''}
+              onChange={(e) => setBusinessId(e.target.value)}
+              aria-label="Business"
+            >
+              {memberships.map((m) => (
+                <option key={m.business_id} value={m.business_id}>
+                  {m.business_name}
+                </option>
+              ))}
+            </select>
+            <label className="block text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+              Outlet
+            </label>
+            <select
+              className="h-8 w-full rounded-lg border border-border bg-background px-2 text-xs"
+              value={outletId ?? ''}
+              onChange={(e) => setOutletId(e.target.value)}
+              aria-label="Outlet"
+            >
+              <option value="" disabled>
+                Select outlet
+              </option>
+              {outlets.map((o) => (
+                <option key={o.id} value={o.id}>
+                  {o.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        ) : null}
 
-        <nav className="flex-1 space-y-1 overflow-y-auto px-2 pos-scroll">
-          {nav.map(({ to, label, icon: Icon, end }) => (
+        <nav className="flex-1 space-y-1.5 overflow-y-auto px-2 pos-scroll">
+          {nav.map(({ to, label, tint, letter, end }) => (
             <NavLink
               key={to}
               to={to}
               end={end}
               className={({ isActive }) =>
                 cn(
-                  'flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors',
+                  'flex items-center gap-2.5 rounded-xl px-2.5 py-2.5 text-sm transition-colors',
                   isActive
-                    ? 'bg-emerald-50 text-emerald-900 ring-1 ring-emerald-100'
-                    : 'text-sidebar-foreground/80 hover:bg-muted',
+                    ? 'bg-emerald-50/90 ring-1 ring-emerald-100'
+                    : 'hover:bg-muted/70',
                 )
               }
             >
               <span
                 className={cn(
-                  'flex size-8 items-center justify-center rounded-lg text-xs font-semibold',
-                  to === '/'
-                    ? 'bg-emerald-100 text-emerald-800'
-                    : to === '/catalog'
-                      ? 'bg-violet-100 text-violet-800'
-                      : 'bg-sky-100 text-sky-800',
+                  'flex size-8 shrink-0 items-center justify-center rounded-full text-xs font-semibold',
+                  tint,
                 )}
               >
-                <Icon className="size-3.5" />
+                {letter}
               </span>
-              <span className="flex-1">{label}</span>
-              {to === '/' ? (
-                <span className="flex items-center gap-1 text-[10px] font-medium text-emerald-700">
-                  <span className="size-1.5 rounded-full bg-emerald-500" />
-                  Online
-                </span>
-              ) : null}
+              <div className="min-w-0 flex-1 leading-tight">
+                <div className="truncate text-[13px] font-medium">{label}</div>
+                <div className="mt-0.5 flex items-center gap-1 text-[10px] text-muted-foreground">
+                  {to === '/' ? (
+                    <>
+                      <span
+                        className={cn(
+                          'size-1.5 rounded-full',
+                          online ? 'bg-emerald-500' : 'bg-amber-500',
+                        )}
+                      />
+                      <span
+                        className={
+                          online ? 'text-emerald-700' : 'text-amber-700'
+                        }
+                      >
+                        {online ? 'Online' : 'Offline'}
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      <span className="size-1.5 rounded-full bg-muted-foreground/40" />
+                      <span>Offline</span>
+                    </>
+                  )}
+                  <span className="text-muted-foreground/50">→</span>
+                  <span className="truncate">{outletName}</span>
+                </div>
+              </div>
             </NavLink>
           ))}
         </nav>
@@ -209,10 +256,10 @@ export function AppShell() {
           <div className="text-sm font-semibold tracking-tight">
             Muto<span className="font-normal text-muted-foreground"> POS</span>
           </div>
-          <p className="mt-1 text-[11px] leading-snug text-muted-foreground">
-            Offline-first hospitality POS · RxDB outbox
+          <p className="mt-1 text-[10px] leading-snug text-muted-foreground">
+            Help · Support · Legal
           </p>
-          <div className="mt-3 flex items-center gap-2">
+          <div className="mt-2.5 flex items-center gap-1.5">
             {(stats?.pending ?? 0) > 0 ? (
               <Badge variant="warning" className="text-[10px]">
                 Outbox {stats?.pending}
@@ -237,7 +284,7 @@ export function AppShell() {
 
       {/* Main column */}
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex h-14 shrink-0 items-center gap-3 border-b border-border bg-card/80 px-4 backdrop-blur">
+        <header className="flex h-[3.25rem] shrink-0 items-center gap-3 border-b border-border bg-card px-4">
           {!sidebarOpen ? (
             <Button
               type="button"
@@ -252,7 +299,7 @@ export function AppShell() {
           ) : null}
 
           <div className="min-w-0 shrink-0">
-            <div className="truncate text-sm font-semibold leading-tight">
+            <div className="truncate text-[15px] font-semibold leading-tight tracking-tight">
               {pageTitle}
             </div>
             <div className="truncate text-[11px] text-muted-foreground">
@@ -260,8 +307,8 @@ export function AppShell() {
             </div>
           </div>
 
-          {/* Staff chips — centered like Vita (Jessica / Ryan / Anna) */}
-          <div className="hidden min-w-0 flex-1 items-center justify-center gap-1.5 overflow-x-auto md:flex pos-scroll">
+          {/* Staff chips — compact Vita style */}
+          <div className="hidden min-w-0 flex-1 items-center justify-center gap-2 overflow-x-auto md:flex pos-scroll">
             {floorStaff.map((s, i) => {
               const active = s.id === staffId
               return (
@@ -270,40 +317,73 @@ export function AppShell() {
                   type="button"
                   onClick={() => setStaffId(s.id)}
                   className={cn(
-                    'inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium transition-colors',
+                    'inline-flex shrink-0 items-center gap-1.5 rounded-full py-1 pl-1 pr-2.5 text-xs font-medium transition-colors',
                     active
-                      ? 'border-violet-200 bg-violet-50 text-violet-900'
-                      : 'border-transparent bg-muted/80 text-muted-foreground hover:bg-muted hover:text-foreground',
+                      ? 'bg-violet-50 text-violet-900 ring-1 ring-violet-100'
+                      : 'bg-transparent text-muted-foreground hover:bg-muted/80 hover:text-foreground',
                   )}
                 >
                   <span
                     className={cn(
-                      'flex size-5 items-center justify-center rounded-full text-[10px] font-semibold',
+                      'flex size-6 items-center justify-center rounded-full text-[10px] font-semibold',
                       avatarTints[i % avatarTints.length],
                     )}
                   >
-                    {initials(s.display_name)}
+                    {initials(s.display_name).slice(0, 1)}
                   </span>
-                  {s.display_name}
+                  {shortName(s.display_name)}
                 </button>
               )
             })}
           </div>
 
-          <div className="ml-auto flex shrink-0 items-center gap-2">
+          <div className="ml-auto flex shrink-0 items-center gap-1.5">
             {isPos ? (
-              <div className="relative hidden sm:block">
-                <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  placeholder="Search items…"
-                  className="h-9 w-44 rounded-full border-border bg-muted/50 pl-8 text-sm lg:w-56"
-                />
-              </div>
+              searchOpen ? (
+                <div className="relative">
+                  <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    autoFocus
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    onBlur={() => {
+                      if (!search) setSearchOpen(false)
+                    }}
+                    placeholder="Search items…"
+                    className="h-9 w-44 rounded-full border-border bg-muted/40 pl-8 pr-8 text-sm"
+                  />
+                  <button
+                    type="button"
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                    onClick={() => {
+                      setSearch('')
+                      setSearchOpen(false)
+                    }}
+                    aria-label="Close search"
+                  >
+                    <X className="size-3.5" />
+                  </button>
+                </div>
+              ) : (
+                <Button
+                  type="button"
+                  size="icon"
+                  variant="ghost"
+                  className="size-9 rounded-full text-muted-foreground"
+                  onClick={() => setSearchOpen(true)}
+                  aria-label="Search items"
+                >
+                  <Search className="size-4" />
+                </Button>
+              )
             ) : null}
 
-            <div className="hidden items-center gap-2 rounded-full border border-border bg-card px-2.5 py-1 sm:flex">
+            <button
+              type="button"
+              onClick={() => void logout()}
+              className="hidden items-center gap-2 rounded-full py-1 pl-2 pr-1 sm:flex"
+              title="Sign out"
+            >
               <div className="text-right leading-tight">
                 <div className="text-xs font-semibold">{accountName}</div>
                 <div className="text-[10px] text-muted-foreground">
@@ -311,19 +391,9 @@ export function AppShell() {
                 </div>
               </div>
               <span className="flex size-8 items-center justify-center rounded-full bg-violet-100 text-xs font-semibold text-violet-800">
-                {accountInitials}
+                {accountInitials.slice(0, 1)}
               </span>
-            </div>
-
-            <Button
-              type="button"
-              size="sm"
-              variant="ghost"
-              className="text-muted-foreground"
-              onClick={() => void logout()}
-            >
-              Sign out
-            </Button>
+            </button>
           </div>
         </header>
 

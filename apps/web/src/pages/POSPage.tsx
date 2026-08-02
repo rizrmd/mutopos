@@ -1,7 +1,15 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useOutletContext } from 'react-router-dom'
 import { v4 as uuidv4 } from 'uuid'
-import { Minus, Plus, Trash2 } from 'lucide-react'
+import {
+  FileText,
+  Minus,
+  Percent,
+  Plus,
+  Printer,
+  Share2,
+  Trash2,
+} from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import {
@@ -34,17 +42,18 @@ type LocalTicket = {
 
 type OutletCtx = { search: string; setSearch: (v: string) => void }
 
+/** Vita daytime pastel chart — solid tile fills */
 const PASTELS = [
-  'bg-[var(--pastel-6)]',
-  'bg-[var(--pastel-1)]',
-  'bg-[var(--pastel-9)]',
-  'bg-[var(--pastel-7)]',
-  'bg-[var(--pastel-3)]',
-  'bg-[var(--pastel-8)]',
-  'bg-[var(--pastel-5)]',
-  'bg-[var(--pastel-2)]',
-  'bg-[var(--pastel-10)]',
-  'bg-[var(--pastel-4)]',
+  'bg-[#f5d9c8]', // peach
+  'bg-[#d4e4f7]', // soft blue
+  'bg-[#e8dff5]', // lavender
+  'bg-[#f5d0d8]', // blush
+  'bg-[#d4ebe3]', // mint
+  'bg-[#e8dff0]', // lilac
+  'bg-[#f5e0c8]', // sand
+  'bg-[#d8e4f0]', // steel blue
+  'bg-[#f0e0d8]', // warm grey-peach
+  'bg-[#dde8f0]', // cool grey
 ]
 
 const TICKET_TINTS = [
@@ -54,6 +63,8 @@ const TICKET_TINTS = [
   'bg-sky-500',
   'bg-violet-500',
 ]
+
+const STATIONS = ['Kitchen', 'Bar 1', 'Bar 2', 'Kitchen'] as const
 
 export function POSPage() {
   const {
@@ -85,11 +96,14 @@ export function POSPage() {
   const [tickets, setTickets] = useState<LocalTicket[]>([])
   const [seededOnce, setSeededOnce] = useState(false)
   const [seedHint, setSeedHint] = useState<string | null>(null)
+  const [discountMinor, setDiscountMinor] = useState(0)
+  const [extraAmountMinor, setExtraAmountMinor] = useState(0)
+  const [, setTick] = useState(0)
 
   const staffName =
     staff.find((s) => s.id === staffId)?.display_name ?? 'Unassigned'
   const outletName =
-    outlets.find((o) => o.id === outletId)?.name ?? 'Select outlet'
+    outlets.find((o) => o.id === outletId)?.name ?? 'Table'
 
   const loadTickets = useCallback(async () => {
     if (!businessId) return
@@ -125,7 +139,6 @@ export function POSPage() {
       setProducts(activeProducts)
       setCategories(activeCats)
       if (!pickDefaultCategory) return
-      // Prefer "all" when products lack categories (legacy local cache).
       const hasCategoryIds = activeProducts.some((p) => p.category_id)
       if (!hasCategoryIds || activeCats.length === 0) {
         setSelectedCategory('all')
@@ -143,7 +156,6 @@ export function POSPage() {
   const load = useCallback(async () => {
     if (!businessId) return
 
-    // 1) Offline-first: paint from RxDB/meta immediately (no network wait).
     let hadLocal = false
     try {
       const local = await getLocalCatalog(businessId)
@@ -156,10 +168,8 @@ export function POSPage() {
       console.warn('[mutopos] local catalog read failed', err)
     }
 
-    // Tickets are always local.
     await loadTickets()
 
-    // 2) Revalidate from API when tenant headers exist (online path).
     if (!tenant) return
     try {
       let [res, cats] = await Promise.all([
@@ -169,7 +179,6 @@ export function POSPage() {
           .catch(() => ({ categories: [] as Category[] })),
       ])
 
-      // Empty / thin catalog and nothing local → pull Vita demo (online only).
       const needsDemo =
         !seededOnce &&
         !hadLocal &&
@@ -205,7 +214,6 @@ export function POSPage() {
       await cacheCatalog(businessId, res.products, cats.categories)
       if (res.products.length > 0) setSeedHint(null)
     } catch {
-      // Network failed — local paint already applied above (or still empty).
       if (!hadLocal) {
         setSeedHint(
           'No cached catalog and server unreachable. Connect once to sync products.',
@@ -230,13 +238,23 @@ export function POSPage() {
     return () => clearInterval(t)
   }, [loadTickets])
 
+  // Live timer for open tickets
+  useEffect(() => {
+    const t = setInterval(() => setTick((n) => n + 1), 1000)
+    return () => clearInterval(t)
+  }, [])
+
   const subtotal = useMemo(
     () => cart.reduce((s, l) => s + l.unitPrice * l.qty, 0),
     [cart],
   )
   const taxRate = currency === 'USD' ? 0.0525 : 0
-  const tax = useMemo(() => Math.round(subtotal * taxRate), [subtotal, taxRate])
-  const total = subtotal + tax
+  const taxable = Math.max(0, subtotal - discountMinor + extraAmountMinor)
+  const tax = useMemo(
+    () => Math.round(taxable * taxRate),
+    [taxable, taxRate],
+  )
+  const total = taxable + tax
 
   const categoryCounts = useMemo(() => {
     const map = new Map<string, number>()
@@ -263,7 +281,6 @@ export function POSPage() {
         pastel: PASTELS[i % PASTELS.length],
       })
     })
-    // Only add "All" / uncategorized when needed
     if (tiles.length === 0) {
       tiles.push({
         id: 'all',
@@ -331,8 +348,20 @@ export function POSPage() {
 
   function clearCart() {
     setCart([])
+    setDiscountMinor(0)
+    setExtraAmountMinor(0)
     setMessage(null)
     setError(null)
+  }
+
+  function applyQuickDiscount() {
+    if (subtotal <= 0) return
+    const ten = Math.round(subtotal * 0.1)
+    setDiscountMinor((d) => (d > 0 ? 0 : ten))
+  }
+
+  function applyAddAmount() {
+    setExtraAmountMinor((a) => a + 100)
   }
 
   async function checkout() {
@@ -360,7 +389,7 @@ export function POSPage() {
       lines,
       payments: [{ method: 'cash', amount_minor: total }],
       subtotal_minor: subtotal,
-      discount_minor: 0,
+      discount_minor: discountMinor,
       tax_minor: tax,
       total_minor: total,
       currency_code: currency,
@@ -419,6 +448,8 @@ export function POSPage() {
       }
 
       setCart([])
+      setDiscountMinor(0)
+      setExtraAmountMinor(0)
       await loadTickets()
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
@@ -435,183 +466,315 @@ export function POSPage() {
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
-      <div className="flex min-h-0 flex-1">
-        {/* Center: categories + products */}
-        <section className="flex min-w-0 flex-1 flex-col">
-          {/* Category tiles — Vita pastel grid */}
-          <div className="pos-scroll border-b border-border px-4 py-3">
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4">
-              {categoryTiles.map((tile) => {
-                const active = selectedCategory === tile.id
-                return (
+    <div className="flex h-full min-h-0">
+      {/* Center: categories + products + table dock */}
+      <section className="flex min-w-0 flex-1 flex-col bg-background">
+        {/* Category tiles — large rounded-rect board (not pills) */}
+        <div className="shrink-0 px-3.5 pb-2 pt-3">
+          <div className="grid grid-cols-2 gap-[15px] sm:grid-cols-3 lg:grid-cols-4">
+            {categoryTiles.map((tile) => {
+              const active = selectedCategory === tile.id
+              return (
+                <button
+                  key={tile.id}
+                  type="button"
+                  onClick={() => setSelectedCategory(tile.id)}
+                  className={cn(
+                    'min-h-[4.75rem] rounded-[14px] px-4 py-3.5 text-left transition-all',
+                    tile.pastel,
+                    active
+                      ? 'shadow-sm ring-2 ring-foreground/12'
+                      : 'hover:brightness-[0.97]',
+                  )}
+                >
+                  <div className="text-[15px] font-semibold tracking-tight text-foreground/90">
+                    {tile.name}
+                  </div>
+                  <div className="mt-1.5 text-[12px] text-foreground/50">
+                    {tile.count} item{tile.count === 1 ? '' : 's'}
+                  </div>
+                </button>
+              )
+            })}
+          </div>
+        </div>
+
+        {/* Product grid — dense 4-col, + top-right / − bottom-right */}
+        <div className="pos-scroll min-h-0 flex-1 overflow-y-auto px-3.5 pb-2 pt-1">
+          <div className="grid grid-cols-2 gap-[15px] sm:grid-cols-3 lg:grid-cols-4">
+            {filteredProducts.map((p) => {
+              const inCart = cart.find((l) => l.productId === p.id)
+              const qty = inCart?.qty ?? 0
+              return (
+                <div
+                  key={p.id}
+                  className={cn(
+                    'relative flex min-h-[5.5rem] flex-col rounded-[14px] border bg-card px-3 py-2.5 shadow-sm transition',
+                    qty > 0
+                      ? 'border-primary/25 ring-1 ring-primary/10'
+                      : 'border-border hover:border-foreground/10',
+                  )}
+                >
                   <button
-                    key={tile.id}
                     type="button"
-                    onClick={() => setSelectedCategory(tile.id)}
-                    className={cn(
-                      'rounded-2xl px-4 py-3.5 text-left transition-all',
-                      tile.pastel,
-                      active
-                        ? 'scale-[1.01] shadow-sm ring-2 ring-foreground/10'
-                        : 'hover:brightness-[0.98]',
-                    )}
+                    onClick={() => addToCart(p)}
+                    className="flex flex-1 flex-col pr-7 text-left"
                   >
-                    <div className="text-sm font-semibold text-foreground/90">
-                      {tile.name}
+                    <div className="text-[13px] font-semibold leading-snug text-foreground">
+                      {p.name}
                     </div>
-                    <div className="mt-1 text-xs text-foreground/55">
-                      {tile.count} item{tile.count === 1 ? '' : 's'}
+                    <div className="mt-0.5 text-[13px] tabular-nums text-muted-foreground">
+                      {money(p.price_minor ?? 0)}
+                    </div>
+                    <div className="mt-auto flex items-center gap-1 pt-2 text-[10px] text-muted-foreground/65">
+                      <span>Orders</span>
+                      <span className="tracking-tight">→</span>
+                      <span>Kitchen</span>
                     </div>
                   </button>
-                )
-              })}
-            </div>
-          </div>
 
-          {/* Product grid */}
-          <div className="pos-scroll min-h-0 flex-1 overflow-y-auto p-4">
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
-              {filteredProducts.map((p) => {
-                const inCart = cart.find((l) => l.productId === p.id)
+                  {/* + always top-right */}
+                  <button
+                    type="button"
+                    aria-label={`Add ${p.name}`}
+                    onClick={() => addToCart(p)}
+                    className="absolute right-2 top-2 flex size-6 items-center justify-center rounded-md text-muted-foreground transition hover:bg-muted hover:text-foreground"
+                  >
+                    <Plus className="size-3.5 stroke-[2.5]" />
+                  </button>
+
+                  {/* − always bottom-right (Vita stepper layout) */}
+                  <button
+                    type="button"
+                    aria-label={`Remove ${p.name}`}
+                    disabled={qty === 0}
+                    onClick={() => changeQty(p.id, -1)}
+                    className={cn(
+                      'absolute bottom-2 right-2 flex size-6 items-center justify-center rounded-md transition',
+                      qty > 0
+                        ? 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                        : 'text-muted-foreground/30',
+                    )}
+                  >
+                    <Minus className="size-3.5 stroke-[2.5]" />
+                  </button>
+                </div>
+              )
+            })}
+            {filteredProducts.length === 0 ? (
+              <div className="col-span-full flex flex-col items-center gap-3 py-12 text-center">
+                <p className="text-sm text-muted-foreground">
+                  {seedHint ??
+                    'No products. Demo seed runs automatically, or add items in Catalog.'}
+                </p>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="rounded-full"
+                  disabled={busy}
+                  onClick={() => {
+                    setSeededOnce(false)
+                    setSeedHint(null)
+                    void load()
+                  }}
+                >
+                  Load demo menu
+                </Button>
+              </div>
+            ) : null}
+          </div>
+        </div>
+
+        {/* Open tickets dock — under center only (not under ticket panel) */}
+        <footer className="shrink-0 border-t border-border/60 bg-card/60 px-3 py-2">
+          <div className="pos-scroll flex gap-2 overflow-x-auto">
+            {tickets.length === 0 ? (
+              <div className="flex h-[3.25rem] items-center px-1 text-[11px] text-muted-foreground">
+                Open tickets appear here after you fire orders
+              </div>
+            ) : (
+              tickets.map((t, i) => {
+                const station = STATIONS[i % STATIONS.length]
+                const ready = t.synced
                 return (
                   <div
-                    key={p.id}
-                    className="group relative flex flex-col rounded-2xl border border-border bg-card p-3 shadow-sm transition hover:border-primary/30 hover:shadow"
+                    key={t.id}
+                    className="flex h-[3.25rem] min-w-[13.5rem] items-center gap-2 rounded-xl border border-border bg-card px-2 shadow-sm"
                   >
-                    <button
-                      type="button"
-                      onClick={() => addToCart(p)}
-                      className="flex flex-1 flex-col text-left"
+                    <span
+                      className={cn(
+                        'flex size-8 shrink-0 items-center justify-center rounded-lg text-[11px] font-bold text-white',
+                        TICKET_TINTS[i % TICKET_TINTS.length],
+                      )}
                     >
-                      <div className="pr-8 text-sm font-semibold leading-snug">
-                        {p.name}
-                      </div>
-                      <div className="mt-1 text-sm text-muted-foreground">
-                        {money(p.price_minor ?? 0)}
-                      </div>
-                      <div className="mt-auto pt-2 text-[10px] text-muted-foreground/70">
-                        Orders → Kitchen
-                      </div>
-                    </button>
-                    <button
-                      type="button"
-                      aria-label={`Add ${p.name}`}
-                      onClick={() => addToCart(p)}
-                      className="absolute right-2 top-2 flex size-7 items-center justify-center rounded-full border border-border bg-card text-muted-foreground shadow-sm transition hover:border-primary hover:bg-primary hover:text-primary-foreground"
-                    >
-                      <Plus className="size-3.5" />
-                    </button>
-                    {inCart ? (
-                      <div className="absolute bottom-2 right-2 flex items-center gap-1 rounded-full bg-muted px-1.5 py-0.5 text-xs font-semibold">
-                        <button
-                          type="button"
-                          className="flex size-5 items-center justify-center rounded-full hover:bg-card"
-                          onClick={() => changeQty(p.id, -1)}
+                      {t.label}
+                    </span>
+                    <div className="min-w-0 flex-1 leading-tight">
+                      <div className="flex items-center gap-1.5">
+                        <span className="truncate text-[12px] font-semibold">
+                          {t.staffName.split(' ')[0] ?? 'Sale'}
+                          {t.staffName.includes(' ')
+                            ? ` ${t.staffName.split(' ').slice(-1)[0]?.[0]}.`
+                            : ''}
+                        </span>
+                        <span
+                          className={cn(
+                            'inline-flex shrink-0 items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[9px] font-semibold',
+                            ready
+                              ? 'bg-emerald-50 text-emerald-700'
+                              : 'bg-sky-50 text-sky-700',
+                          )}
                         >
-                          <Minus className="size-3" />
-                        </button>
-                        <span className="min-w-4 text-center">{inCart.qty}</span>
-                        <button
-                          type="button"
-                          className="flex size-5 items-center justify-center rounded-full hover:bg-card"
-                          onClick={() => changeQty(p.id, 1)}
-                        >
-                          <Plus className="size-3" />
-                        </button>
+                          {ready ? '✓ Ready' : '◌ In progress'}
+                        </span>
                       </div>
-                    ) : null}
+                      <div className="mt-0.5 flex items-center gap-1.5 text-[10px] text-muted-foreground">
+                        <span>
+                          {t.lineCount} item{t.lineCount === 1 ? '' : 's'}
+                        </span>
+                        <span className="text-muted-foreground/40">→</span>
+                        <span className="inline-flex items-center gap-1">
+                          <span
+                            className={cn(
+                              'size-1.5 rounded-sm',
+                              station.startsWith('Kitchen')
+                                ? 'bg-blue-500'
+                                : 'bg-violet-400',
+                            )}
+                          />
+                          {station}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="shrink-0 text-right leading-tight">
+                      <div className="text-[11px] font-semibold tabular-nums text-foreground">
+                        {formatElapsed(t.createdAt)}
+                      </div>
+                    </div>
                   </div>
                 )
-              })}
-              {filteredProducts.length === 0 ? (
-                <div className="col-span-full flex flex-col items-center gap-3 py-12 text-center">
-                  <p className="text-sm text-muted-foreground">
-                    {seedHint ??
-                      'No products. Demo seed runs automatically, or add items in Catalog.'}
-                  </p>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    className="rounded-full"
-                    disabled={busy}
-                    onClick={() => {
-                      setSeededOnce(false)
-                      setSeedHint(null)
-                      void load()
-                    }}
-                  >
-                    Load demo menu
-                  </Button>
-                </div>
-              ) : null}
+              })
+            )}
+          </div>
+        </footer>
+      </section>
+
+      {/* Right order ticket — Vita check panel */}
+      <aside className="flex w-[19.5rem] shrink-0 flex-col border-l border-border bg-ticket xl:w-[21rem]">
+        <div className="flex items-start justify-between gap-2 border-b border-border px-4 py-3">
+          <div className="min-w-0">
+            <div className="truncate text-[15px] font-semibold tracking-tight">
+              {outletName}
+            </div>
+            <div className="truncate text-[12px] text-muted-foreground">
+              {staffName}
             </div>
           </div>
-        </section>
-
-        {/* Right order ticket */}
-        <aside className="flex w-[20rem] shrink-0 flex-col border-l border-border bg-ticket xl:w-[22rem]">
-          <div className="flex items-start justify-between gap-2 border-b border-border px-4 py-3">
-            <div className="min-w-0">
-              <div className="truncate text-base font-semibold">
-                {outletName}
-              </div>
-              <div className="truncate text-xs text-muted-foreground">
-                {staffName}
-              </div>
-            </div>
+          <div className="flex shrink-0 items-center gap-0.5">
             <Button
               type="button"
               size="icon"
               variant="ghost"
-              className="size-8 shrink-0 text-muted-foreground"
+              className="size-7 text-muted-foreground"
+              title="Share"
+              disabled={cart.length === 0}
+            >
+              <Share2 className="size-3.5" />
+            </Button>
+            <Button
+              type="button"
+              size="icon"
+              variant="ghost"
+              className="size-7 text-muted-foreground"
+              title="Print"
+              disabled={cart.length === 0}
+            >
+              <Printer className="size-3.5" />
+            </Button>
+            <Button
+              type="button"
+              size="icon"
+              variant="ghost"
+              className="size-7 text-muted-foreground"
+              title="Note"
+              disabled={cart.length === 0}
+            >
+              <FileText className="size-3.5" />
+            </Button>
+            <Button
+              type="button"
+              size="icon"
+              variant="ghost"
+              className="size-7 text-muted-foreground"
               title="Clear cart"
               onClick={clearCart}
               disabled={cart.length === 0}
             >
-              <Trash2 className="size-4" />
+              <Trash2 className="size-3.5" />
             </Button>
           </div>
+        </div>
 
-          <div className="pos-scroll min-h-0 flex-1 overflow-y-auto px-4 py-3">
-            {cart.length === 0 ? (
-              <div className="flex h-full items-center justify-center py-10 text-center text-sm text-muted-foreground">
-                Ticket empty — tap products
-              </div>
-            ) : (
-              <ul className="space-y-3">
-                {cart.map((l, idx) => (
-                  <li key={l.productId} className="text-sm">
+        <div className="pos-scroll min-h-0 flex-1 overflow-y-auto px-4 py-3">
+          {cart.length === 0 ? (
+            <div className="flex h-full items-center justify-center py-10 text-center text-sm text-muted-foreground">
+              Ticket empty — tap products
+            </div>
+          ) : (
+            <ul className="space-y-3.5">
+              {cart.map((l, idx) => {
+                const course = `P${(idx % 3) + 1}`
+                return (
+                  <li key={l.productId} className="text-[13px]">
                     <div className="flex items-start gap-2">
-                      <span className="w-4 shrink-0 text-xs font-semibold text-muted-foreground">
-                        {idx + 1}
+                      <span className="w-3 shrink-0 pt-0.5 text-[12px] font-semibold text-muted-foreground">
+                        {l.qty}
                       </span>
                       <div className="min-w-0 flex-1">
                         <div className="flex items-start justify-between gap-2">
-                          <span className="font-medium leading-snug">
-                            {l.name}
+                          <span className="flex min-w-0 items-center gap-1.5 font-medium leading-snug">
+                            <span className="truncate">{l.name}</span>
+                            <span className="inline-flex size-4 shrink-0 items-center justify-center rounded-full bg-muted text-[9px] font-semibold text-muted-foreground">
+                              {course}
+                            </span>
                           </span>
                           <span className="shrink-0 font-semibold tabular-nums">
                             {money(l.unitPrice * l.qty)}
                           </span>
                         </div>
-                        <div className="mt-1.5 flex items-center justify-between text-xs text-muted-foreground">
-                          <span>{money(l.unitPrice)} each</span>
+                        <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-muted-foreground">
+                          <span>
+                            <span className="font-medium text-foreground/70">
+                              With
+                            </span>{' '}
+                            —
+                          </span>
+                          <span>
+                            <span className="font-medium text-foreground/70">
+                              Remove
+                            </span>{' '}
+                            —
+                          </span>
+                        </div>
+                        <div className="mt-1.5 flex items-center justify-between">
+                          <span className="text-[11px] text-muted-foreground">
+                            {money(l.unitPrice)} each
+                          </span>
                           <div className="flex items-center gap-1">
                             <button
                               type="button"
-                              className="flex size-6 items-center justify-center rounded-md border border-border hover:bg-muted"
+                              className="flex size-6 items-center justify-center rounded-md border border-border text-muted-foreground hover:bg-muted"
                               onClick={() => changeQty(l.productId, -1)}
                             >
                               <Minus className="size-3" />
                             </button>
-                            <span className="w-5 text-center font-semibold text-foreground">
+                            <span className="w-5 text-center text-xs font-semibold">
                               {l.qty}
                             </span>
                             <button
                               type="button"
-                              className="flex size-6 items-center justify-center rounded-md border border-border hover:bg-muted"
+                              className="flex size-6 items-center justify-center rounded-md border border-border text-muted-foreground hover:bg-muted"
                               onClick={() => changeQty(l.productId, 1)}
                             >
                               <Plus className="size-3" />
@@ -621,27 +784,73 @@ export function POSPage() {
                       </div>
                     </div>
                   </li>
-                ))}
-              </ul>
-            )}
+                )
+              })}
+            </ul>
+          )}
+        </div>
+
+        <div className="shrink-0 border-t border-border">
+          {/* Discount / Add amount row */}
+          <div className="flex items-center gap-4 border-b border-border/70 px-4 py-2.5">
+            <button
+              type="button"
+              onClick={applyQuickDiscount}
+              disabled={cart.length === 0}
+              className={cn(
+                'inline-flex items-center gap-1.5 text-[12px] font-medium transition-colors',
+                discountMinor > 0
+                  ? 'text-primary'
+                  : 'text-muted-foreground hover:text-foreground',
+                cart.length === 0 && 'opacity-40',
+              )}
+            >
+              <Percent className="size-3.5" />
+              Discount
+              {discountMinor > 0 ? (
+                <span className="tabular-nums">−{money(discountMinor)}</span>
+              ) : null}
+            </button>
+            <button
+              type="button"
+              onClick={applyAddAmount}
+              disabled={cart.length === 0}
+              className={cn(
+                'inline-flex items-center gap-1.5 text-[12px] font-medium text-muted-foreground transition-colors hover:text-foreground',
+                cart.length === 0 && 'opacity-40',
+              )}
+            >
+              <span className="grid grid-cols-2 gap-px">
+                <span className="size-1 rounded-[1px] bg-current" />
+                <span className="size-1 rounded-[1px] bg-current" />
+                <span className="size-1 rounded-[1px] bg-current" />
+                <span className="size-1 rounded-[1px] bg-current" />
+              </span>
+              Add amount
+              {extraAmountMinor > 0 ? (
+                <span className="tabular-nums text-foreground">
+                  +{money(extraAmountMinor)}
+                </span>
+              ) : null}
+            </button>
           </div>
 
-          <div className="space-y-2 border-t border-border px-4 py-3">
-            {tax > 0 ? (
-              <div className="flex justify-between text-xs text-muted-foreground">
+          <div className="space-y-1.5 px-4 py-3">
+            {taxRate > 0 ? (
+              <div className="flex justify-between text-[12px] text-muted-foreground">
                 <span>Tax {(taxRate * 100).toFixed(2)}%</span>
                 <span className="tabular-nums font-medium text-foreground">
                   {money(tax)}
                 </span>
               </div>
             ) : null}
-            <div className="flex justify-between text-xs text-muted-foreground">
+            <div className="flex justify-between text-[12px] text-muted-foreground">
               <span>Subtotal</span>
               <span className="tabular-nums font-medium text-foreground">
-                {money(subtotal)}
+                {money(Math.max(0, subtotal - discountMinor + extraAmountMinor))}
               </span>
             </div>
-            <div className="flex justify-between text-base font-bold">
+            <div className="flex justify-between text-[15px] font-bold">
               <span>Total</span>
               <span className="tabular-nums">{money(total)}</span>
             </div>
@@ -656,74 +865,25 @@ export function POSPage() {
                 {error}
               </p>
             ) : null}
+          </div>
 
+          <div className="px-4 pb-4">
             <Button
               type="button"
-              className="h-11 w-full rounded-xl text-sm font-bold"
+              className="h-11 w-full rounded-full text-sm font-semibold"
               disabled={busy || cart.length === 0 || !outletId}
               onClick={() => void checkout()}
             >
               {busy ? 'Processing…' : 'Fire orders'}
             </Button>
             {!outletId ? (
-              <p className="text-[11px] font-medium text-amber-800">
-                Select an outlet to checkout.
+              <p className="mt-2 text-center text-[11px] font-medium text-amber-800">
+                Tap + on Menus to select an outlet.
               </p>
             ) : null}
           </div>
-        </aside>
-      </div>
-
-      {/* Bottom open tickets strip */}
-      <footer className="shrink-0 border-t border-border bg-card px-3 py-2">
-        <div className="pos-scroll flex gap-2 overflow-x-auto">
-          {tickets.length === 0 ? (
-            <div className="flex h-14 items-center px-2 text-xs text-muted-foreground">
-              Open tickets appear here after you fire orders
-            </div>
-          ) : (
-            tickets.map((t, i) => (
-              <div
-                key={t.id}
-                className="flex h-14 min-w-[11rem] items-center gap-2 rounded-xl border border-border bg-background px-2.5 shadow-sm"
-              >
-                <span
-                  className={cn(
-                    'flex size-8 shrink-0 items-center justify-center rounded-lg text-[10px] font-bold text-white',
-                    TICKET_TINTS[i % TICKET_TINTS.length],
-                  )}
-                >
-                  {t.label}
-                </span>
-                <div className="min-w-0 flex-1 leading-tight">
-                  <div className="truncate text-xs font-semibold">
-                    {t.staffName.split(' ')[0] ?? 'Sale'}
-                  </div>
-                  <div className="text-[10px] font-medium text-muted-foreground">
-                    {t.lineCount} item{t.lineCount === 1 ? '' : 's'}
-                    <span className="mx-1">·</span>
-                    <span
-                      className={
-                        t.synced ? 'text-emerald-700' : 'text-amber-700'
-                      }
-                    >
-                      {t.synced ? 'Ready' : 'Pending'}
-                    </span>
-                  </div>
-                </div>
-                <div className="text-right leading-tight">
-                  <div className="text-[10px] tabular-nums text-muted-foreground">
-                    {formatElapsed(t.createdAt)}
-                  </div>
-                  <div className="text-[10px] font-bold tabular-nums">
-                    {money(t.totalMinor)}
-                  </div>
-                </div>
-              </div>
-            ))
-          )}
         </div>
-      </footer>
+      </aside>
     </div>
   )
 }
