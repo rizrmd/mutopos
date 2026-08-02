@@ -100,12 +100,12 @@ func (s *Server) handleOTPVerify(w http.ResponseWriter, r *http.Request) {
 	defer tx.Rollback(ctx)
 
 	var (
-		chalID     uuid.UUID
-		codeHash   string
-		attempts   int
+		chalID      uuid.UUID
+		codeHash    string
+		attempts    int
 		maxAttempts int
-		expiresAt  time.Time
-		consumedAt *time.Time
+		expiresAt   time.Time
+		consumedAt  *time.Time
 	)
 	err = tx.QueryRow(ctx, `
 		SELECT id, code_hash, attempts, max_attempts, expires_at, consumed_at
@@ -190,7 +190,7 @@ func (s *Server) handleOTPVerify(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Bootstrap first business if user has none
+	// Bootstrap first business if user has none — Vita daytime demo tenant
 	var bizCount int
 	_ = tx.QueryRow(ctx, `
 		SELECT COUNT(*) FROM business_members WHERE user_id = $1 AND status = 'active'
@@ -199,13 +199,11 @@ func (s *Server) handleOTPVerify(w http.ResponseWriter, r *http.Request) {
 	var bootstrap map[string]any
 	if bizCount == 0 {
 		var bizID, outletID uuid.UUID
-		name := "My Business"
-		if display != nil && *display != "" {
-			name = *display + "'s Business"
-		}
+		// Match Vita mockup branding so first login feels like the reference
+		name := "Rubirosa Ristorante"
 		err = tx.QueryRow(ctx, `
 			INSERT INTO businesses (name, timezone, currency_code, status)
-			VALUES ($1, 'Asia/Jakarta', 'IDR', 'active')
+			VALUES ($1, 'America/New_York', 'USD', 'active')
 			RETURNING id
 		`, name).Scan(&bizID)
 		if err != nil {
@@ -222,16 +220,16 @@ func (s *Server) handleOTPVerify(w http.ResponseWriter, r *http.Request) {
 		}
 		err = tx.QueryRow(ctx, `
 			INSERT INTO outlets (business_id, name, code, is_active)
-			VALUES ($1, 'Main Outlet', 'MAIN', true)
+			VALUES ($1, 'Table floor', 'MAIN', true)
 			RETURNING id
 		`, bizID).Scan(&outletID)
 		if err != nil {
 			writeErr(w, http.StatusInternalServerError, "db_error", err.Error())
 			return
 		}
-		// owner staff profile for POS
+		// Manager account staff (header identity) — not the floor-server chips
 		var staffID uuid.UUID
-		staffName := "Owner"
+		staffName := "David Ross"
 		if display != nil && *display != "" {
 			staffName = *display
 		}
@@ -249,11 +247,31 @@ func (s *Server) handleOTPVerify(w http.ResponseWriter, r *http.Request) {
 			VALUES ($1, $2, $3)
 		`, staffID, outletID, bizID)
 
+		// Floor staff chips + À la carte menu from the Vita reference
+		if _, err := seedFullVitaDemo(ctx, tx, bizID, outletID); err != nil {
+			writeErr(w, http.StatusInternalServerError, "seed_failed", err.Error())
+			return
+		}
+
+		// Prefer first floor cashier as active POS staff (Jessica S.) so header
+		// chips match the mockup; manager remains the signed-in account.
+		var floorStaffID uuid.UUID
+		errFloor := tx.QueryRow(ctx, `
+			SELECT id FROM staff
+			WHERE business_id = $1 AND role = 'cashier' AND status = 'active'
+			ORDER BY display_name LIMIT 1
+		`, bizID).Scan(&floorStaffID)
+		activeStaff := staffID
+		if errFloor == nil {
+			activeStaff = floorStaffID
+		}
+
 		bootstrap = map[string]any{
 			"business_id": bizID,
 			"outlet_id":   outletID,
-			"staff_id":    staffID,
+			"staff_id":    activeStaff,
 			"name":        name,
+			"demo":        true,
 		}
 	}
 

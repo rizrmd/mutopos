@@ -329,12 +329,41 @@ export const api = {
       message?: string
     }>(res)
   },
+
+  /** Fill Vita daytime demo catalog + floor staff when the tenant is empty. */
+  async seedDemo(t: TenantHeaders) {
+    const res = await fetch(`${API_BASE}/v1/demo/seed`, {
+      method: 'POST',
+      headers: tenantHeaders(t),
+    })
+    return parse<{
+      ok: boolean
+      demo?: {
+        catalog_seeded?: boolean
+        staff_added?: number
+        business?: string
+      }
+    }>(res)
+  },
 }
 
-export function formatIDR(minor: number): string {
+/** Format money. USD minor = cents; IDR minor = whole rupiah. */
+export function formatMoney(minor: number, currency = 'IDR'): string {
+  const code = (currency || 'IDR').toUpperCase()
+  if (code === 'USD') {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+    }).format(minor / 100)
+  }
   return new Intl.NumberFormat('id-ID', {
     style: 'currency',
-    currency: 'IDR',
+    currency: code,
     maximumFractionDigits: 0,
   }).format(minor)
+}
+
+/** @deprecated prefer formatMoney(minor, currency) */
+export function formatIDR(minor: number): string {
+  return formatMoney(minor, 'IDR')
 }

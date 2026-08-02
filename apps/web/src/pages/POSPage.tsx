@@ -6,7 +6,7 @@ import { Minus, Plus, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   api,
-  formatIDR,
+  formatMoney,
   type Category,
   type Product,
 } from '@/lib/api'
@@ -28,37 +28,50 @@ type LocalTicket = {
   synced: boolean
   createdAt: number
   lineCount: number
+  staffName: string
+  label: string
 }
 
 type OutletCtx = { search: string; setSearch: (v: string) => void }
 
-/** High-contrast tile fills (mid tone + dark text — not washed pastel) */
-const TILES = [
-  'bg-[var(--tile-6)]',
-  'bg-[var(--tile-1)]',
-  'bg-[var(--tile-9)]',
-  'bg-[var(--tile-7)]',
-  'bg-[var(--tile-3)]',
-  'bg-[var(--tile-8)]',
-  'bg-[var(--tile-5)]',
-  'bg-[var(--tile-2)]',
-  'bg-[var(--tile-10)]',
-  'bg-[var(--tile-4)]',
+const PASTELS = [
+  'bg-[var(--pastel-6)]',
+  'bg-[var(--pastel-1)]',
+  'bg-[var(--pastel-9)]',
+  'bg-[var(--pastel-7)]',
+  'bg-[var(--pastel-3)]',
+  'bg-[var(--pastel-8)]',
+  'bg-[var(--pastel-5)]',
+  'bg-[var(--pastel-2)]',
+  'bg-[var(--pastel-10)]',
+  'bg-[var(--pastel-4)]',
 ]
 
 const TICKET_TINTS = [
-  'bg-emerald-700',
-  'bg-rose-700',
-  'bg-amber-600',
-  'bg-sky-700',
-  'bg-violet-700',
+  'bg-emerald-500',
+  'bg-rose-500',
+  'bg-amber-400',
+  'bg-sky-500',
+  'bg-violet-500',
 ]
 
 export function POSPage() {
-  const { tenant, businessId, outletId, staffId, outlets, staff } =
-    useSession()
+  const {
+    tenant,
+    businessId,
+    outletId,
+    staffId,
+    outlets,
+    staff,
+    memberships,
+    refreshTenantData,
+  } = useSession()
   const outletCtx = useOutletContext<OutletCtx | undefined>()
   const search = outletCtx?.search ?? ''
+
+  const currency =
+    memberships.find((m) => m.business_id === businessId)?.currency_code ??
+    'USD'
 
   const [products, setProducts] = useState<Product[]>([])
   const [categories, setCategories] = useState<Category[]>([])
@@ -70,6 +83,12 @@ export function POSPage() {
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [tickets, setTickets] = useState<LocalTicket[]>([])
+  const [seededOnce, setSeededOnce] = useState(false)
+
+  const staffName =
+    staff.find((s) => s.id === staffId)?.display_name ?? 'Unassigned'
+  const outletName =
+    outlets.find((o) => o.id === outletId)?.name ?? 'Select outlet'
 
   const loadTickets = useCallback(async () => {
     if (!businessId) return
@@ -78,7 +97,7 @@ export function POSPage() {
       .find({ selector: { businessId }, sort: [{ createdAt: 'desc' }] })
       .exec()
     setTickets(
-      local.slice(0, 12).map((d) => {
+      local.slice(0, 12).map((d, i) => {
         let lineCount = 0
         try {
           lineCount = (JSON.parse(d.linesJson) as unknown[]).length
@@ -91,23 +110,51 @@ export function POSPage() {
           synced: d.synced,
           createdAt: d.createdAt,
           lineCount,
+          staffName,
+          label: `T${8 + (i % 3)}`,
         }
       }),
     )
-  }, [businessId])
+  }, [businessId, staffName])
 
   const load = useCallback(async () => {
     if (!tenant || !businessId) return
     try {
-      const [res, cats] = await Promise.all([
+      let [res, cats] = await Promise.all([
         api.listProducts(tenant),
         api
           .listCategories(tenant)
           .catch(() => ({ categories: [] as Category[] })),
       ])
+
+      // Empty tenant → pull Vita demo catalog + floor staff once
+      if (
+        !seededOnce &&
+        cats.categories.length === 0 &&
+        res.products.length === 0
+      ) {
+        try {
+          await api.seedDemo(tenant)
+          setSeededOnce(true)
+          await refreshTenantData()
+          ;[res, cats] = await Promise.all([
+            api.listProducts(tenant),
+            api.listCategories(tenant),
+          ])
+        } catch {
+          // non-fatal — user can add catalog manually
+        }
+      }
+
       setProducts(res.products.filter((p) => p.is_active))
       setCategories(cats.categories.filter((c) => c.is_active))
       await cacheProducts(businessId, res.products)
+
+      // Default to Oysters category like the mockup when present
+      const oysters = cats.categories.find(
+        (c) => c.name.toLowerCase() === 'oysters',
+      )
+      if (oysters) setSelectedCategory(oysters.id)
     } catch {
       const db = await getDb()
       const local = await db.products
@@ -126,13 +173,18 @@ export function POSPage() {
       )
     }
     await loadTickets()
-  }, [tenant, businessId, loadTickets])
+  }, [
+    tenant,
+    businessId,
+    loadTickets,
+    seededOnce,
+    refreshTenantData,
+  ])
 
   useEffect(() => {
     void load()
   }, [load])
 
-  // Refresh tickets when outbox may have synced
   useEffect(() => {
     const t = setInterval(() => void loadTickets(), 4000)
     return () => clearInterval(t)
@@ -142,7 +194,9 @@ export function POSPage() {
     () => cart.reduce((s, l) => s + l.unitPrice * l.qty, 0),
     [cart],
   )
-  const total = subtotal
+  const taxRate = currency === 'USD' ? 0.0525 : 0
+  const tax = useMemo(() => Math.round(subtotal * taxRate), [subtotal, taxRate])
+  const total = subtotal + tax
 
   const categoryCounts = useMemo(() => {
     const map = new Map<string, number>()
@@ -158,31 +212,24 @@ export function POSPage() {
       id: string
       name: string
       count: number
-      color: string
-    }> = [
-      {
-        id: 'all',
-        name: 'All items',
-        count: products.length,
-        color: TILES[0],
-      },
-    ]
+      pastel: string
+    }> = []
     const sorted = [...categories].sort((a, b) => a.sort_order - b.sort_order)
     sorted.forEach((c, i) => {
       tiles.push({
         id: c.id,
         name: c.name,
         count: categoryCounts.get(c.id) ?? 0,
-        color: TILES[(i + 1) % TILES.length],
+        pastel: PASTELS[i % PASTELS.length],
       })
     })
-    const uncat = categoryCounts.get('__uncategorized') ?? 0
-    if (uncat > 0 || categories.length === 0) {
+    // Only add "All" / uncategorized when needed
+    if (tiles.length === 0) {
       tiles.push({
-        id: '__uncategorized',
-        name: categories.length === 0 ? 'Menu' : 'Other',
-        count: uncat || products.length,
-        color: TILES[3],
+        id: 'all',
+        name: 'All items',
+        count: products.length,
+        pastel: PASTELS[0],
       })
     }
     return tiles
@@ -192,7 +239,7 @@ export function POSPage() {
     const q = search.trim().toLowerCase()
     return products.filter((p) => {
       if (selectedCategory === 'all') {
-        // all
+        // show all
       } else if (selectedCategory === '__uncategorized') {
         if (p.category_id) return false
       } else if (p.category_id !== selectedCategory) {
@@ -206,10 +253,9 @@ export function POSPage() {
     })
   }, [products, selectedCategory, search])
 
-  const outletName =
-    outlets.find((o) => o.id === outletId)?.name ?? 'Select outlet'
-  const staffName =
-    staff.find((s) => s.id === staffId)?.display_name ?? 'Unassigned'
+  function money(n: number) {
+    return formatMoney(n, currency)
+  }
 
   function addToCart(p: Product) {
     setCart((prev) => {
@@ -249,10 +295,6 @@ export function POSPage() {
     setError(null)
   }
 
-  /**
-   * Seamless checkout: always persist locally, try online when available,
-   * otherwise outbox — worker flushes automatically (no Force/Sync buttons).
-   */
   async function checkout() {
     if (!tenant || !businessId || !outletId) {
       setError('Select business and outlet first')
@@ -279,9 +321,9 @@ export function POSPage() {
       payments: [{ method: 'cash', amount_minor: total }],
       subtotal_minor: subtotal,
       discount_minor: 0,
-      tax_minor: 0,
+      tax_minor: tax,
       total_minor: total,
-      currency_code: 'IDR',
+      currency_code: currency,
     }
 
     try {
@@ -313,16 +355,17 @@ export function POSPage() {
             })
           }
           receiptLabel = sale.receipt_no ?? sale.id.slice(0, 8)
-          setMessage(`Sale complete · ${receiptLabel} · ${formatIDR(sale.total_minor)}`)
+          setMessage(
+            `Sale complete · ${receiptLabel} · ${money(sale.total_minor)}`,
+          )
         } catch {
-          // Fall through to outbox — seamless offline path
           await enqueueOutbox({
             id: uuidv4(),
             type: 'sale.complete',
             payload,
             businessId,
           })
-          setMessage(`Sale saved · will sync · ${formatIDR(total)}`)
+          setMessage(`Sale saved · will sync · ${money(total)}`)
           void flushOutbox(() => tenant)
         }
       } else {
@@ -332,7 +375,7 @@ export function POSPage() {
           payload,
           businessId,
         })
-        setMessage(`Sale saved offline · ${formatIDR(total)}`)
+        setMessage(`Sale saved offline · ${money(total)}`)
       }
 
       setCart([])
@@ -356,8 +399,8 @@ export function POSPage() {
       <div className="flex min-h-0 flex-1">
         {/* Center: categories + products */}
         <section className="flex min-w-0 flex-1 flex-col">
-          {/* Category tiles — square, contrast fills */}
-          <div className="pos-scroll border-b border-border px-3 py-3">
+          {/* Category tiles — Vita pastel grid */}
+          <div className="pos-scroll border-b border-border px-4 py-3">
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4">
               {categoryTiles.map((tile) => {
                 const active = selectedCategory === tile.id
@@ -367,17 +410,17 @@ export function POSPage() {
                     type="button"
                     onClick={() => setSelectedCategory(tile.id)}
                     className={cn(
-                      'px-3 py-3 text-left transition-colors',
-                      tile.color,
+                      'rounded-2xl px-4 py-3.5 text-left transition-all',
+                      tile.pastel,
                       active
-                        ? 'outline outline-2 outline-offset-[-2px] outline-foreground'
-                        : 'hover:brightness-95',
+                        ? 'scale-[1.01] shadow-sm ring-2 ring-foreground/10'
+                        : 'hover:brightness-[0.98]',
                     )}
                   >
-                    <div className="text-sm font-bold text-[var(--tile-fg)]">
+                    <div className="text-sm font-semibold text-foreground/90">
                       {tile.name}
                     </div>
-                    <div className="mt-1 text-xs font-medium text-[var(--tile-muted)]">
+                    <div className="mt-1 text-xs text-foreground/55">
                       {tile.count} item{tile.count === 1 ? '' : 's'}
                     </div>
                   </button>
@@ -387,53 +430,51 @@ export function POSPage() {
           </div>
 
           {/* Product grid */}
-          <div className="pos-scroll min-h-0 flex-1 overflow-y-auto p-3">
+          <div className="pos-scroll min-h-0 flex-1 overflow-y-auto p-4">
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
               {filteredProducts.map((p) => {
                 const inCart = cart.find((l) => l.productId === p.id)
                 return (
                   <div
                     key={p.id}
-                    className="relative flex flex-col border border-border bg-card p-3 transition hover:border-foreground"
+                    className="group relative flex flex-col rounded-2xl border border-border bg-card p-3 shadow-sm transition hover:border-primary/30 hover:shadow"
                   >
                     <button
                       type="button"
                       onClick={() => addToCart(p)}
                       className="flex flex-1 flex-col text-left"
                     >
-                      <div className="pr-8 text-sm font-semibold leading-snug text-foreground">
+                      <div className="pr-8 text-sm font-semibold leading-snug">
                         {p.name}
                       </div>
-                      <div className="mt-1 text-sm font-medium text-foreground/70">
-                        {formatIDR(p.price_minor ?? 0)}
+                      <div className="mt-1 text-sm text-muted-foreground">
+                        {money(p.price_minor ?? 0)}
                       </div>
-                      {p.sku ? (
-                        <div className="mt-auto pt-2 text-[11px] text-muted-foreground">
-                          {p.sku}
-                        </div>
-                      ) : null}
+                      <div className="mt-auto pt-2 text-[10px] text-muted-foreground/70">
+                        Orders → Kitchen
+                      </div>
                     </button>
                     <button
                       type="button"
                       aria-label={`Add ${p.name}`}
                       onClick={() => addToCart(p)}
-                      className="absolute right-2 top-2 flex size-7 items-center justify-center border border-border bg-background text-foreground transition hover:bg-foreground hover:text-background"
+                      className="absolute right-2 top-2 flex size-7 items-center justify-center rounded-full border border-border bg-card text-muted-foreground shadow-sm transition hover:border-primary hover:bg-primary hover:text-primary-foreground"
                     >
                       <Plus className="size-3.5" />
                     </button>
                     {inCart ? (
-                      <div className="absolute bottom-2 right-2 flex items-center gap-0 border border-border bg-background text-xs font-bold">
+                      <div className="absolute bottom-2 right-2 flex items-center gap-1 rounded-full bg-muted px-1.5 py-0.5 text-xs font-semibold">
                         <button
                           type="button"
-                          className="flex size-6 items-center justify-center hover:bg-muted"
+                          className="flex size-5 items-center justify-center rounded-full hover:bg-card"
                           onClick={() => changeQty(p.id, -1)}
                         >
                           <Minus className="size-3" />
                         </button>
-                        <span className="min-w-5 text-center">{inCart.qty}</span>
+                        <span className="min-w-4 text-center">{inCart.qty}</span>
                         <button
                           type="button"
-                          className="flex size-6 items-center justify-center hover:bg-muted"
+                          className="flex size-5 items-center justify-center rounded-full hover:bg-card"
                           onClick={() => changeQty(p.id, 1)}
                         >
                           <Plus className="size-3" />
@@ -445,18 +486,21 @@ export function POSPage() {
               })}
               {filteredProducts.length === 0 ? (
                 <p className="col-span-full py-12 text-center text-sm text-muted-foreground">
-                  No products. Add some in Catalog.
+                  No products. Demo seed runs automatically, or add items in
+                  Catalog.
                 </p>
               ) : null}
             </div>
           </div>
         </section>
 
-        {/* Right ticket — Vita-style order panel */}
-        <aside className="flex w-80 shrink-0 flex-col border-l border-border bg-card xl:w-[22rem]">
-          <div className="flex items-start justify-between gap-2 border-b border-border px-3 py-3">
+        {/* Right order ticket */}
+        <aside className="flex w-[20rem] shrink-0 flex-col border-l border-border bg-ticket xl:w-[22rem]">
+          <div className="flex items-start justify-between gap-2 border-b border-border px-4 py-3">
             <div className="min-w-0">
-              <div className="truncate text-sm font-bold">{outletName}</div>
+              <div className="truncate text-base font-semibold">
+                {outletName}
+              </div>
               <div className="truncate text-xs text-muted-foreground">
                 {staffName}
               </div>
@@ -474,7 +518,7 @@ export function POSPage() {
             </Button>
           </div>
 
-          <div className="pos-scroll min-h-0 flex-1 overflow-y-auto px-3 py-3">
+          <div className="pos-scroll min-h-0 flex-1 overflow-y-auto px-4 py-3">
             {cart.length === 0 ? (
               <div className="flex h-full items-center justify-center py-10 text-center text-sm text-muted-foreground">
                 Ticket empty — tap products
@@ -489,29 +533,29 @@ export function POSPage() {
                       </span>
                       <div className="min-w-0 flex-1">
                         <div className="flex items-start justify-between gap-2">
-                          <span className="font-semibold leading-snug">
+                          <span className="font-medium leading-snug">
                             {l.name}
                           </span>
-                          <span className="shrink-0 font-bold tabular-nums">
-                            {formatIDR(l.unitPrice * l.qty)}
+                          <span className="shrink-0 font-semibold tabular-nums">
+                            {money(l.unitPrice * l.qty)}
                           </span>
                         </div>
                         <div className="mt-1.5 flex items-center justify-between text-xs text-muted-foreground">
-                          <span>{formatIDR(l.unitPrice)} each</span>
-                          <div className="flex items-center border border-border">
+                          <span>{money(l.unitPrice)} each</span>
+                          <div className="flex items-center gap-1">
                             <button
                               type="button"
-                              className="flex size-6 items-center justify-center hover:bg-muted"
+                              className="flex size-6 items-center justify-center rounded-md border border-border hover:bg-muted"
                               onClick={() => changeQty(l.productId, -1)}
                             >
                               <Minus className="size-3" />
                             </button>
-                            <span className="w-6 text-center font-bold text-foreground">
+                            <span className="w-5 text-center font-semibold text-foreground">
                               {l.qty}
                             </span>
                             <button
                               type="button"
-                              className="flex size-6 items-center justify-center hover:bg-muted"
+                              className="flex size-6 items-center justify-center rounded-md border border-border hover:bg-muted"
                               onClick={() => changeQty(l.productId, 1)}
                             >
                               <Plus className="size-3" />
@@ -526,16 +570,24 @@ export function POSPage() {
             )}
           </div>
 
-          <div className="space-y-2 border-t border-border px-3 py-3">
+          <div className="space-y-2 border-t border-border px-4 py-3">
+            {tax > 0 ? (
+              <div className="flex justify-between text-xs text-muted-foreground">
+                <span>Tax {(taxRate * 100).toFixed(2)}%</span>
+                <span className="tabular-nums font-medium text-foreground">
+                  {money(tax)}
+                </span>
+              </div>
+            ) : null}
             <div className="flex justify-between text-xs text-muted-foreground">
               <span>Subtotal</span>
               <span className="tabular-nums font-medium text-foreground">
-                {formatIDR(subtotal)}
+                {money(subtotal)}
               </span>
             </div>
             <div className="flex justify-between text-base font-bold">
               <span>Total</span>
-              <span className="tabular-nums">{formatIDR(total)}</span>
+              <span className="tabular-nums">{money(total)}</span>
             </div>
 
             {message ? (
@@ -551,7 +603,7 @@ export function POSPage() {
 
             <Button
               type="button"
-              className="h-11 w-full text-sm font-bold"
+              className="h-11 w-full rounded-xl text-sm font-bold"
               disabled={busy || cart.length === 0 || !outletId}
               onClick={() => void checkout()}
             >
@@ -566,42 +618,40 @@ export function POSPage() {
         </aside>
       </div>
 
-      {/* Bottom tickets */}
-      <footer className="shrink-0 border-t border-border bg-card px-2 py-2">
+      {/* Bottom open tickets strip */}
+      <footer className="shrink-0 border-t border-border bg-card px-3 py-2">
         <div className="pos-scroll flex gap-2 overflow-x-auto">
           {tickets.length === 0 ? (
-            <div className="flex h-12 items-center px-2 text-xs text-muted-foreground">
-              Recent tickets appear here
+            <div className="flex h-14 items-center px-2 text-xs text-muted-foreground">
+              Open tickets appear here after you fire orders
             </div>
           ) : (
             tickets.map((t, i) => (
               <div
                 key={t.id}
-                className="flex h-12 min-w-[10.5rem] items-center gap-2 border border-border bg-background px-2"
+                className="flex h-14 min-w-[11rem] items-center gap-2 rounded-xl border border-border bg-background px-2.5 shadow-sm"
               >
                 <span
                   className={cn(
-                    'flex size-7 shrink-0 items-center justify-center text-[10px] font-bold text-white',
+                    'flex size-8 shrink-0 items-center justify-center rounded-lg text-[10px] font-bold text-white',
                     TICKET_TINTS[i % TICKET_TINTS.length],
                   )}
                 >
-                  {t.id.slice(0, 2).toUpperCase()}
+                  {t.label}
                 </span>
                 <div className="min-w-0 flex-1 leading-tight">
                   <div className="truncate text-xs font-semibold">
-                    {staffName.split(' ')[0] ?? 'Sale'}
+                    {t.staffName.split(' ')[0] ?? 'Sale'}
                   </div>
-                  <div className="text-[10px] font-medium">
-                    <span className="text-muted-foreground">
-                      {t.lineCount} item{t.lineCount === 1 ? '' : 's'}
-                    </span>
-                    <span className="mx-1 text-muted-foreground">·</span>
+                  <div className="text-[10px] font-medium text-muted-foreground">
+                    {t.lineCount} item{t.lineCount === 1 ? '' : 's'}
+                    <span className="mx-1">·</span>
                     <span
                       className={
-                        t.synced ? 'text-emerald-800' : 'text-amber-800'
+                        t.synced ? 'text-emerald-700' : 'text-amber-700'
                       }
                     >
-                      {t.synced ? 'Synced' : 'Pending'}
+                      {t.synced ? 'Ready' : 'Pending'}
                     </span>
                   </div>
                 </div>
@@ -610,7 +660,7 @@ export function POSPage() {
                     {formatElapsed(t.createdAt)}
                   </div>
                   <div className="text-[10px] font-bold tabular-nums">
-                    {formatIDR(t.totalMinor)}
+                    {money(t.totalMinor)}
                   </div>
                 </div>
               </div>

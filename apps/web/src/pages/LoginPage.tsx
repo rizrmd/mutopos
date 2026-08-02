@@ -18,7 +18,7 @@ export function LoginPage() {
   const navigate = useNavigate()
   const [phone, setPhone] = useState('+628')
   const [code, setCode] = useState('')
-  const [displayName, setDisplayName] = useState('')
+  const [displayName, setDisplayName] = useState('David Ross')
   const [devCode, setDevCode] = useState<string | undefined>()
   const [step, setStep] = useState<'phone' | 'otp'>('phone')
   const [error, setError] = useState<string | null>(null)
@@ -97,7 +97,7 @@ export function LoginPage() {
                   id="name"
                   value={displayName}
                   onChange={(e) => setDisplayName(e.target.value)}
-                  placeholder="Owner name"
+                  placeholder="David Ross"
                   className="h-10"
                 />
               </div>

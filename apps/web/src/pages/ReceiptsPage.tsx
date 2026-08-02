@@ -9,21 +9,25 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card'
-import { api, formatIDR, type Sale } from '@/lib/api'
+import { api, formatMoney, type Sale } from '@/lib/api'
 import { getDb } from '@/lib/db'
 import { useSession } from '@/lib/session'
 import { cn } from '@/lib/utils'
 
 const TINTS = [
-  'bg-emerald-700',
-  'bg-rose-700',
-  'bg-amber-600',
-  'bg-sky-700',
-  'bg-violet-700',
+  'bg-emerald-500',
+  'bg-rose-500',
+  'bg-amber-400',
+  'bg-sky-500',
+  'bg-violet-500',
 ]
 
 export function ReceiptsPage() {
-  const { tenant, businessId } = useSession()
+  const { tenant, businessId, memberships } = useSession()
+  const currency =
+    memberships.find((m) => m.business_id === businessId)?.currency_code ??
+    'USD'
+  const money = (n: number) => formatMoney(n, currency)
   const [sales, setSales] = useState<Sale[]>([])
   const [localPending, setLocalPending] = useState<
     Array<{ id: string; totalMinor: number; synced: boolean; createdAt: number }>
@@ -97,7 +101,7 @@ export function ReceiptsPage() {
                 </div>
               </div>
               <div className="font-bold tabular-nums">
-                {formatIDR(s.total_minor)}
+                {money(s.total_minor)}
               </div>
             </Link>
           ))}
@@ -142,7 +146,7 @@ export function ReceiptsPage() {
                   </div>
                 </div>
                 <span className="font-bold tabular-nums">
-                  {formatIDR(s.totalMinor)}
+                  {money(s.totalMinor)}
                 </span>
               </li>
             ))}
@@ -179,6 +183,8 @@ export function ReceiptDetailPage() {
     return <p className="text-muted-foreground">Loading…</p>
   }
 
+  const money = (n: number) => formatMoney(n, sale.currency_code || 'USD')
+
   return (
     <div className="mx-auto max-w-lg space-y-4">
       <Button variant="outline" size="sm" asChild>
@@ -206,19 +212,19 @@ export function ReceiptDetailPage() {
                   </span>
                 </span>
                 <span className="font-bold tabular-nums">
-                  {formatIDR(l.line_total_minor)}
+                  {money(l.line_total_minor)}
                 </span>
               </li>
             ))}
           </ul>
           <div className="flex justify-between border-t border-border pt-3 text-base font-bold">
             <span>Total</span>
-            <span className="tabular-nums">{formatIDR(sale.total_minor)}</span>
+            <span className="tabular-nums">{money(sale.total_minor)}</span>
           </div>
           <div className="text-muted-foreground">
             Payments:{' '}
             {(sale.payments ?? [])
-              .map((p) => `${p.method} ${formatIDR(p.amount_minor)}`)
+              .map((p) => `${p.method} ${money(p.amount_minor)}`)
               .join(', ') || '—'}
           </div>
         </CardContent>

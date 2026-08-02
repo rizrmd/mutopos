@@ -70,6 +70,9 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("POST /v1/devices", s.requireTenant(s.handleRegisterDevice))
 	s.mux.HandleFunc("POST /v1/commands", s.requireTenant(s.handlePushCommand))
 	s.mux.HandleFunc("GET /v1/commands/{id}", s.requireTenant(s.handleGetCommandReceipt))
+
+	// Demo sample data (Vita daytime mockup catalog + floor staff)
+	s.mux.HandleFunc("POST /v1/demo/seed", s.requireTenant(s.handleSeedDemo))
 }
 
 func (s *Server) handleHealthz(w http.ResponseWriter, r *http.Request) {

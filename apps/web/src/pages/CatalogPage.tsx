@@ -10,29 +10,32 @@ import {
   CardTitle,
 } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
-import { api, formatIDR, type Category, type Product } from '@/lib/api'
+import { api, formatMoney, type Category, type Product } from '@/lib/api'
 import { cacheProducts } from '@/lib/db'
 import { useSession } from '@/lib/session'
 import { cn } from '@/lib/utils'
 
 const TILES = [
-  'bg-[var(--tile-6)]',
-  'bg-[var(--tile-1)]',
-  'bg-[var(--tile-9)]',
-  'bg-[var(--tile-7)]',
-  'bg-[var(--tile-3)]',
-  'bg-[var(--tile-8)]',
-  'bg-[var(--tile-5)]',
-  'bg-[var(--tile-2)]',
+  'bg-[var(--pastel-6)]',
+  'bg-[var(--pastel-1)]',
+  'bg-[var(--pastel-9)]',
+  'bg-[var(--pastel-7)]',
+  'bg-[var(--pastel-3)]',
+  'bg-[var(--pastel-8)]',
+  'bg-[var(--pastel-5)]',
+  'bg-[var(--pastel-2)]',
 ]
 
 export function CatalogPage() {
-  const { tenant, businessId } = useSession()
+  const { tenant, businessId, memberships } = useSession()
+  const currency =
+    memberships.find((m) => m.business_id === businessId)?.currency_code ??
+    'USD'
   const [products, setProducts] = useState<Product[]>([])
   const [categories, setCategories] = useState<Category[]>([])
   const [name, setName] = useState('')
   const [sku, setSku] = useState('')
-  const [price, setPrice] = useState('10000')
+  const [price, setPrice] = useState('1295')
   const [catName, setCatName] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
@@ -104,7 +107,7 @@ export function CatalogPage() {
             <span
               key={c.id}
               className={cn(
-                'px-3 py-2 text-sm font-semibold text-[var(--tile-fg)]',
+                'rounded-xl px-3 py-2 text-sm font-semibold text-foreground/90',
                 TILES[i % TILES.length],
               )}
             >
@@ -118,7 +121,9 @@ export function CatalogPage() {
         <Card>
           <CardHeader className="p-4 pb-2">
             <CardTitle className="text-base">Add product</CardTitle>
-            <CardDescription>Price in IDR (rupiah).</CardDescription>
+            <CardDescription>
+              Price in {currency === 'USD' ? 'cents (e.g. 1295 = $12.95)' : 'minor units'}.
+            </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3 p-4 pt-2">
             <Input
@@ -196,7 +201,7 @@ export function CatalogPage() {
               >
                 <div className="font-semibold">{p.name}</div>
                 <div className="mt-0.5 text-sm text-foreground/70">
-                  {formatIDR(p.price_minor ?? 0)}
+                  {formatMoney(p.price_minor ?? 0, currency)}
                 </div>
                 <div className="mt-2 flex items-center justify-between text-[11px] font-medium">
                   <span className="text-muted-foreground">

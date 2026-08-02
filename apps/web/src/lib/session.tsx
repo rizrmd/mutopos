@@ -119,14 +119,33 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       staffId,
       deviceKey,
     }
-    const [o, s] = await Promise.all([api.listOutlets(t), api.listStaff(t)])
+    const [o, s, me] = await Promise.all([
+      api.listOutlets(t),
+      api.listStaff(t),
+      api.me(token).catch(() => null),
+    ])
     setOutlets(o.outlets)
     setStaff(s.staff)
+    if (me) {
+      setUser(me.user)
+      setMemberships(me.memberships)
+      saveStored({
+        token,
+        user: me.user,
+        memberships: me.memberships,
+        businessId,
+        outletId: outletId ?? undefined,
+        staffId: staffId ?? undefined,
+      })
+    }
     if (!outletId && o.outlets[0]) {
       setOutletIdState(o.outlets[0].id)
     }
-    if (!staffId && s.staff[0]) {
-      setStaffIdState(s.staff[0].id)
+    // Prefer floor cashier when nothing selected yet
+    if (!staffId) {
+      const cashiers = s.staff.filter((x) => x.role === 'cashier')
+      const pick = cashiers[0] ?? s.staff[0]
+      if (pick) setStaffIdState(pick.id)
     }
     if (deviceKey) {
       try {
