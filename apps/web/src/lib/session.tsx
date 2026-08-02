@@ -143,36 +143,42 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     void (async () => {
-      const key = await getOrCreateDeviceKey()
-      setDeviceKey(key)
-      const stored = loadStored()
-      if (stored?.token) {
-        try {
-          const me = await api.me(stored.token)
-          setToken(stored.token)
-          setUser(me.user)
-          setMemberships(me.memberships)
-          const biz =
-            stored.businessId &&
-            me.memberships.some((m) => m.business_id === stored.businessId)
-              ? stored.businessId
-              : me.memberships[0]?.business_id
-          setBusinessIdState(biz ?? null)
-          setOutletIdState(stored.outletId ?? null)
-          setStaffIdState(stored.staffId ?? null)
-          saveStored({
-            token: stored.token,
-            user: me.user,
-            memberships: me.memberships,
-            businessId: biz,
-            outletId: stored.outletId,
-            staffId: stored.staffId,
-          })
-        } catch {
-          saveStored(null)
+      // Always leave the loading gate, even if RxDB or /me fails.
+      try {
+        const key = await getOrCreateDeviceKey()
+        setDeviceKey(key)
+        const stored = loadStored()
+        if (stored?.token) {
+          try {
+            const me = await api.me(stored.token)
+            setToken(stored.token)
+            setUser(me.user)
+            setMemberships(me.memberships)
+            const biz =
+              stored.businessId &&
+              me.memberships.some((m) => m.business_id === stored.businessId)
+                ? stored.businessId
+                : me.memberships[0]?.business_id
+            setBusinessIdState(biz ?? null)
+            setOutletIdState(stored.outletId ?? null)
+            setStaffIdState(stored.staffId ?? null)
+            saveStored({
+              token: stored.token,
+              user: me.user,
+              memberships: me.memberships,
+              businessId: biz,
+              outletId: stored.outletId,
+              staffId: stored.staffId,
+            })
+          } catch {
+            saveStored(null)
+          }
         }
+      } catch (err) {
+        console.error('[mutopos] session bootstrap failed', err)
+      } finally {
+        setReady(true)
       }
-      setReady(true)
     })()
   }, [])
 

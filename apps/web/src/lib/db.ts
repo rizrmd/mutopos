@@ -66,17 +66,30 @@ export type OutboxDocument = RxDocument<OutboxDoc>
 
 let dbPromise: Promise<MutoDatabase> | null = null
 
+// Indexed number fields need multipleOf (RxDB SC35); indexed strings need maxLength (SC34).
+const tsNumber = {
+  type: 'number' as const,
+  multipleOf: 1,
+  minimum: 0,
+  maximum: 9007199254740991,
+}
+
 const outboxSchema = {
   version: 0,
   primaryKey: 'id',
   type: 'object',
   properties: {
     id: { type: 'string', maxLength: 64 },
-    type: { type: 'string' },
+    type: { type: 'string', maxLength: 64 },
     payload: { type: 'string' },
-    createdAt: { type: 'number' },
-    status: { type: 'string' },
-    attempts: { type: 'number' },
+    createdAt: tsNumber,
+    status: { type: 'string', maxLength: 32 },
+    attempts: {
+      type: 'number' as const,
+      multipleOf: 1,
+      minimum: 0,
+      maximum: 1_000_000,
+    },
     lastError: { type: 'string' },
     businessId: { type: 'string', maxLength: 64 },
     resultJson: { type: 'string' },
@@ -96,7 +109,7 @@ const productSchema = {
     sku: { type: 'string' },
     priceMinor: { type: 'number' },
     isActive: { type: 'boolean' },
-    updatedAt: { type: 'number' },
+    updatedAt: tsNumber,
   },
   required: ['id', 'businessId', 'name', 'priceMinor', 'isActive', 'updatedAt'],
   indexes: ['businessId'],
@@ -111,12 +124,12 @@ const saleSchema = {
     businessId: { type: 'string', maxLength: 64 },
     outletId: { type: 'string' },
     clientSaleId: { type: 'string', maxLength: 64 },
-    status: { type: 'string' },
+    status: { type: 'string', maxLength: 32 },
     totalMinor: { type: 'number' },
     receiptNo: { type: 'string' },
     serverId: { type: 'string' },
     linesJson: { type: 'string' },
-    createdAt: { type: 'number' },
+    createdAt: tsNumber,
     synced: { type: 'boolean' },
   },
   required: [
@@ -150,10 +163,11 @@ export async function getDb(): Promise<MutoDatabase> {
       const storage = wrappedValidateAjvStorage({
         storage: getRxStorageDexie(),
       })
+      // Do not set ignoreDuplicate: true — it is only allowed with the
+      // RxDB dev-mode plugin (DB9) and breaks production/preview builds.
       const db = await createRxDatabase<Collections>({
         name: 'mutopos',
         storage,
-        ignoreDuplicate: true,
       })
       if (!db.outbox) {
         await db.addCollections({
@@ -164,21 +178,50 @@ export async function getDb(): Promise<MutoDatabase> {
         })
       }
       return db
-    })()
+    })().catch((err) => {
+      // Allow a later retry after a failed first open (e.g. transient IDB).
+      dbPromise = null
+      throw err
+    })
   }
   return dbPromise
 }
 
+function randomDeviceKey(): string {
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+    return crypto.randomUUID()
+  }
+  return `dev-${Date.now()}`
+}
+
+/** localStorage fallback when RxDB/IndexedDB is unavailable. */
+const DEVICE_KEY_LS = 'mutopos.device_key'
+
 export async function getOrCreateDeviceKey(): Promise<string> {
-  const db = await getDb()
-  const existing = await db.meta.findOne('device_key').exec()
-  if (existing) return existing.value
-  const key =
-    typeof crypto !== 'undefined' && crypto.randomUUID
-      ? crypto.randomUUID()
-      : `dev-${Date.now()}`
-  await db.meta.insert({ id: 'device_key', value: key })
-  return key
+  try {
+    const db = await getDb()
+    const existing = await db.meta.findOne('device_key').exec()
+    if (existing) return existing.value
+    const key = randomDeviceKey()
+    await db.meta.insert({ id: 'device_key', value: key })
+    try {
+      localStorage.setItem(DEVICE_KEY_LS, key)
+    } catch {
+      /* ignore */
+    }
+    return key
+  } catch (err) {
+    console.error('[mutopos] RxDB unavailable; using localStorage device key', err)
+    try {
+      const cached = localStorage.getItem(DEVICE_KEY_LS)
+      if (cached) return cached
+      const key = randomDeviceKey()
+      localStorage.setItem(DEVICE_KEY_LS, key)
+      return key
+    } catch {
+      return randomDeviceKey()
+    }
+  }
 }
 
 export async function enqueueOutbox(entry: {

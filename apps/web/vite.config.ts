@@ -15,7 +15,22 @@ export default defineConfig({
     },
   },
   server: {
+    host: '0.0.0.0',
     port: 5173,
+    proxy: {
+      '/api': {
+        target: 'http://127.0.0.1:8080',
+        changeOrigin: true,
+        rewrite: (p) => p.replace(/^\/api/, ''),
+      },
+    },
+  },
+  // Sandbox preview (https://rizky-mutopos.fural.space → :3000)
+  preview: {
+    host: '0.0.0.0',
+    port: 3000,
+    // Allow Fural sandbox domain (and any *.fural.space) through the reverse proxy
+    allowedHosts: true,
     proxy: {
       '/api': {
         target: 'http://127.0.0.1:8080',
