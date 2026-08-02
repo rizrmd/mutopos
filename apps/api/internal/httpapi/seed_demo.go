@@ -7,7 +7,13 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
+
+	"github.com/rizrmd/mutopos/apps/api/internal/authutil"
 )
+
+// DemoStaffPIN is the default Square-style passcode for Vita demo cashiers.
+// Documented for local/dev only — change in production.
+const DemoStaffPIN = "1234"
 
 // dbTX is satisfied by *pgxpool.Pool and pgx.Tx.
 type dbTX interface {
@@ -128,7 +134,13 @@ func seedVitaDemoCatalog(ctx context.Context, q dbTX, businessID uuid.UUID) (see
 }
 
 // seedVitaDemoStaff adds Jessica / Ryan / Anna when only the owner staff row exists.
+// Each demo cashier gets DemoStaffPIN (bcrypt) so Square-style passcode login works.
 func seedVitaDemoStaff(ctx context.Context, q dbTX, businessID, outletID uuid.UUID) (added int, err error) {
+	pinHash, err := authutil.HashStaffPIN(DemoStaffPIN)
+	if err != nil {
+		return 0, err
+	}
+
 	var staffCount int
 	if err = q.QueryRow(ctx, `
 		SELECT COUNT(*) FROM staff WHERE business_id = $1 AND status = 'active'
@@ -137,16 +149,26 @@ func seedVitaDemoStaff(ctx context.Context, q dbTX, businessID, outletID uuid.UU
 	}
 	// Owner-only (or empty) → add floor staff from the mockup.
 	if staffCount > 1 {
+		// Backfill missing PINs on existing demo cashiers (idempotent).
+		_, _ = q.Exec(ctx, `
+			UPDATE staff
+			SET pin_hash = $2, updated_at = now()
+			WHERE business_id = $1
+			  AND role = 'cashier'
+			  AND status = 'active'
+			  AND (pin_hash IS NULL OR pin_hash = '')
+			  AND display_name = ANY($3::text[])
+		`, businessID, pinHash, []string{"Jessica S.", "Ryan T.", "Anna K."})
 		return 0, nil
 	}
 
 	for _, s := range demoStaff {
 		var id uuid.UUID
 		err = q.QueryRow(ctx, `
-			INSERT INTO staff (business_id, display_name, role, status)
-			VALUES ($1, $2, $3, 'active')
+			INSERT INTO staff (business_id, display_name, role, status, pin_hash)
+			VALUES ($1, $2, $3, 'active', $4)
 			RETURNING id
-		`, businessID, s.Name, s.Role).Scan(&id)
+		`, businessID, s.Name, s.Role, pinHash).Scan(&id)
 		if err != nil {
 			return added, err
 		}

@@ -40,6 +40,8 @@ export type Staff = {
   display_name: string
   role: string
   status: string
+  /** True when a passcode is configured (PIN never returned). */
+  has_pin?: boolean
 }
 
 export type Category = {
@@ -197,6 +199,38 @@ export const api = {
       headers: tenantHeaders(t),
     })
     return parse<{ staff: Staff[] }>(res)
+  },
+
+  /** Square-style team passcode clock-in. */
+  async staffLogin(t: TenantHeaders, staff_id: string, pin: string) {
+    const res = await fetch(`${API_BASE}/v1/staff/login`, {
+      method: 'POST',
+      headers: { ...tenantHeaders(t), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ staff_id, pin }),
+    })
+    return parse<{
+      ok: boolean
+      staff_id: string
+      display_name: string
+      role: string
+    }>(res)
+  },
+
+  async setStaffPin(
+    t: TenantHeaders,
+    staffId: string,
+    pin: string,
+    current_pin?: string,
+  ) {
+    const res = await fetch(`${API_BASE}/v1/staff/${staffId}/pin`, {
+      method: 'POST',
+      headers: { ...tenantHeaders(t), 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        pin,
+        ...(current_pin ? { current_pin } : {}),
+      }),
+    })
+    return parse<{ ok: boolean; id: string; has_pin: boolean }>(res)
   },
 
   async listCategories(t: TenantHeaders) {

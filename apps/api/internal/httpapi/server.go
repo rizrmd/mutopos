@@ -52,6 +52,8 @@ func (s *Server) routes() {
 
 	s.mux.HandleFunc("GET /v1/staff", s.requireTenant(s.handleListStaff))
 	s.mux.HandleFunc("POST /v1/staff", s.requireTenant(s.handleCreateStaff))
+	s.mux.HandleFunc("POST /v1/staff/login", s.requireTenant(s.handleStaffLogin))
+	s.mux.HandleFunc("POST /v1/staff/{id}/pin", s.requireTenant(s.handleSetStaffPIN))
 
 	s.mux.HandleFunc("GET /v1/categories", s.requireTenant(s.handleListCategories))
 	s.mux.HandleFunc("POST /v1/categories", s.requireTenant(s.handleCreateCategory))

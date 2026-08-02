@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
-import { Menu, Plus, Search, Wifi, WifiOff, X } from 'lucide-react'
+import { Lock, Menu, Plus, Search, Wifi, WifiOff, X } from 'lucide-react'
 
+import { StaffPasscodeScreen } from '@/components/StaffPasscodeScreen'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -64,7 +65,8 @@ export function AppShell() {
     staff,
     setBusinessId,
     setOutletId,
-    setStaffId,
+    loginAsStaff,
+    lockStaff,
     logout,
   } = useSession()
   const [stats, setStats] = useState<OutboxStats | null>(null)
@@ -72,9 +74,34 @@ export function AppShell() {
   const [search, setSearch] = useState('')
   const [searchOpen, setSearchOpen] = useState(false)
   const [scopeOpen, setScopeOpen] = useState(false)
+  /** Passcode overlay — required when no staff clocked in. */
+  const [passcodeOpen, setPasscodeOpen] = useState(false)
+  const [passcodeTarget, setPasscodeTarget] = useState<string | null>(null)
   const location = useLocation()
 
   useEffect(() => subscribeOutbox(setStats), [])
+
+  // Gate POS until a team member clocks in with passcode
+  useEffect(() => {
+    if (!staffId) {
+      setPasscodeOpen(true)
+      setPasscodeTarget(null)
+    }
+  }, [staffId])
+
+  const openPasscode = useCallback((staffTarget?: string | null) => {
+    setPasscodeTarget(staffTarget ?? null)
+    setPasscodeOpen(true)
+  }, [])
+
+  const onStaffVerify = useCallback(
+    async (id: string, pin: string) => {
+      await loginAsStaff(id, pin)
+      setPasscodeOpen(false)
+      setPasscodeTarget(null)
+    },
+    [loginAsStaff],
+  )
 
   const businessName = useMemo(
     () =>
@@ -321,7 +348,7 @@ export function AppShell() {
             </div>
           </div>
 
-          {/* Staff chips — compact Vita style */}
+          {/* Active staff + switch/lock — passcode required to switch (Square-style) */}
           <div className="hidden min-w-0 flex-1 items-center justify-center gap-2 overflow-x-auto md:flex pos-scroll">
             {floorStaff.map((s, i) => {
               const active = s.id === staffId
@@ -330,9 +357,16 @@ export function AppShell() {
                   key={s.id}
                   type="button"
                   aria-pressed={active}
-                  onClick={() => setStaffId(s.id)}
+                  title={
+                    active
+                      ? 'Clocked in'
+                      : 'Switch team member (passcode required)'
+                  }
+                  onClick={() => {
+                    if (active) return
+                    openPasscode(s.id)
+                  }}
                   className={cn(
-                    // border-2 always — active only changes color/bg
                     'inline-flex shrink-0 items-center gap-1.5 rounded-none border-2 py-1 pl-1 pr-2.5 text-xs font-medium transition-colors',
                     active
                       ? 'border-violet-500/70 bg-violet-200 text-violet-950'
@@ -348,9 +382,37 @@ export function AppShell() {
                     {initials(s.display_name).slice(0, 1)}
                   </span>
                   {shortName(s.display_name)}
+                  {active ? (
+                    <Lock className="size-3 opacity-60" aria-hidden />
+                  ) : null}
                 </button>
               )
             })}
+            {staffId ? (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="h-8 shrink-0 gap-1.5 rounded-none px-2 text-xs"
+                onClick={() => {
+                  lockStaff()
+                  openPasscode(null)
+                }}
+                title="Lock register — require passcode"
+              >
+                <Lock className="size-3.5" />
+                Lock
+              </Button>
+            ) : (
+              <Button
+                type="button"
+                size="sm"
+                className="h-8 shrink-0 rounded-none px-3 text-xs font-semibold"
+                onClick={() => openPasscode(null)}
+              >
+                Clock in
+              </Button>
+            )}
           </div>
 
           <div className="ml-auto flex shrink-0 items-center gap-1.5">
@@ -422,6 +484,23 @@ export function AppShell() {
           <Outlet context={{ search, setSearch }} />
         </main>
       </div>
+
+      <StaffPasscodeScreen
+        open={passcodeOpen}
+        staff={staff}
+        businessName={businessName}
+        initialStaffId={passcodeTarget}
+        required={!staffId}
+        onVerify={onStaffVerify}
+        onClose={
+          staffId
+            ? () => {
+                setPasscodeOpen(false)
+                setPasscodeTarget(null)
+              }
+            : undefined
+        }
+      />
     </div>
   )
 }

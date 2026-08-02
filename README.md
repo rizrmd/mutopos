@@ -112,7 +112,7 @@ cd apps/api && go test ./...
 | Health | `GET /healthz`, `GET /readyz`, `GET /v1/meta` |
 | Auth (WA OTP stub) | `POST /v1/auth/otp/request`, `POST /v1/auth/otp/verify`, `POST /v1/auth/logout`, `GET /v1/me` |
 | Business | `GET/POST /v1/businesses`, `GET /v1/businesses/{id}` |
-| Outlet / staff | `GET/POST /v1/outlets`, `PATCH /v1/outlets/{id}`, `GET/POST /v1/staff` |
+| Outlet / staff | `GET/POST /v1/outlets`, `PATCH /v1/outlets/{id}`, `GET/POST /v1/staff`, `POST /v1/staff/login`, `POST /v1/staff/{id}/pin` |
 | Catalog | `GET/POST /v1/categories`, `GET/POST/PATCH /v1/products` |
 | Sales | `GET /v1/sales`, `GET /v1/sales/{id}`, `POST /v1/sales/complete` |
 | Outbox push | `POST /v1/devices`, `POST /v1/commands`, `GET /v1/commands/{id}` |
@@ -146,11 +146,13 @@ Dev proxy: `/api/*` → `http://127.0.0.1:8080/*` (`apps/web/vite.config.ts`).
 
 ### Web flows
 
-1. **Login** — phone E.164 + OTP stub  
-2. **Tenant context** — business / outlet / staff selectors in the shell  
+1. **Owner login** — phone E.164 + OTP stub (device / manager session)  
+2. **Staff clock-in** — Square-style passcode screen (team grid + 4-digit PIN pad). Free staff switching is disabled; use **Lock** to clock out.  
 3. **Catalog** — create categories & products (cached into TinyBase)  
 4. **POS** — cart → complete **online** (`POST /v1/sales/complete`) or **via outbox**  
 5. **Receipts** — server list/detail + local TinyBase sale rows  
+
+**Demo floor cashiers** (from `POST /v1/demo/seed`): Jessica / Ryan / Anna — default passcode **`1234`**. Owner can set or change PINs via `POST /v1/staff/{id}/pin`.
 
 ## Offline outbox (TinyBase → Go)
 

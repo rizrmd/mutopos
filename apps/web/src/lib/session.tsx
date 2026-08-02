@@ -47,7 +47,12 @@ type SessionContextValue = {
   tenant: TenantHeaders | null
   setBusinessId: (id: string) => void
   setOutletId: (id: string) => void
+  /** Prefer loginAsStaff — free setStaffId is only for internal restore. */
   setStaffId: (id: string) => void
+  /** Verify passcode via API, then set active floor staff. */
+  loginAsStaff: (staffId: string, pin: string) => Promise<void>
+  /** Clear active staff (Square lock / clock out) — requires passcode to resume. */
+  lockStaff: () => void
   loginWithOTP: (
     phone: string,
     code: string,
@@ -152,12 +157,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       if (!outletId && o.outlets[0]) {
         setOutletIdState(o.outlets[0].id)
       }
-      // Prefer floor cashier when nothing selected yet
-      if (!staffId) {
-        const cashiers = s.staff.filter((x) => x.role === 'cashier')
-        const pick = cashiers[0] ?? s.staff[0]
-        if (pick) setStaffIdState(pick.id)
-      }
+      // Do not auto-assign floor staff — require Square-style passcode clock-in.
       if (deviceKey) {
         try {
           await api.registerDevice(t, {
@@ -285,14 +285,15 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       setMemberships(me.memberships)
       setBusinessIdState(biz)
       if (res.bootstrap?.outlet_id) setOutletIdState(res.bootstrap.outlet_id)
-      if (res.bootstrap?.staff_id) setStaffIdState(res.bootstrap.staff_id)
+      // Owner OTP does not clock in a floor cashier — passcode screen will.
+      setStaffIdState(null)
       saveStored({
         token: res.access_token,
         user: res.user,
         memberships: me.memberships,
         businessId: biz ?? undefined,
         outletId: res.bootstrap?.outlet_id,
-        staffId: res.bootstrap?.staff_id,
+        staffId: undefined,
       })
     },
     [],
@@ -350,11 +351,71 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     (id: string) => {
       setStaffIdState(id)
       if (token && user) {
-        persist({ token, user, memberships, businessId: businessId ?? undefined, outletId: outletId ?? undefined, staffId: id })
+        persist({
+          token,
+          user,
+          memberships,
+          businessId: businessId ?? undefined,
+          outletId: outletId ?? undefined,
+          staffId: id,
+        })
       }
     },
     [token, user, memberships, businessId, outletId, persist],
   )
+
+  const loginAsStaff = useCallback(
+    async (id: string, pin: string) => {
+      if (!token || !businessId) {
+        throw new Error('Not signed in')
+      }
+      const t: TenantHeaders = {
+        token,
+        businessId,
+        outletId,
+        staffId: null,
+        deviceKey,
+      }
+      const res = await api.staffLogin(t, id, pin)
+      setStaffIdState(res.staff_id)
+      if (user) {
+        persist({
+          token,
+          user,
+          memberships,
+          businessId,
+          outletId: outletId ?? undefined,
+          staffId: res.staff_id,
+        })
+      }
+    },
+    [
+      token,
+      businessId,
+      outletId,
+      deviceKey,
+      user,
+      memberships,
+      persist,
+    ],
+  )
+
+  const lockStaff = useCallback(() => {
+    setStaffIdState(null)
+    if (token && user) {
+      const cached = loadStored()
+      saveStored({
+        token,
+        user,
+        memberships,
+        businessId: businessId ?? undefined,
+        outletId: outletId ?? undefined,
+        staffId: undefined,
+        outlets: cached?.outlets ?? outlets,
+        staff: cached?.staff ?? staff,
+      })
+    }
+  }, [token, user, memberships, businessId, outletId, outlets, staff])
 
   const value: SessionContextValue = {
     ready,
@@ -371,6 +432,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     setBusinessId,
     setOutletId,
     setStaffId,
+    loginAsStaff,
+    lockStaff,
     loginWithOTP,
     requestOTP,
     logout,

@@ -4,6 +4,8 @@ import (
 	"net/http"
 
 	"github.com/google/uuid"
+
+	"github.com/rizrmd/mutopos/apps/api/internal/authutil"
 )
 
 func (s *Server) handleListOutlets(w http.ResponseWriter, r *http.Request) {
@@ -118,7 +120,9 @@ func (s *Server) handlePatchOutlet(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleListStaff(w http.ResponseWriter, r *http.Request) {
 	tc := tenantFrom(r.Context())
 	rows, err := s.pool.Query(r.Context(), `
-		SELECT id, user_id, display_name, role, status, created_at
+		SELECT id, user_id, display_name, role, status,
+		       (pin_hash IS NOT NULL AND pin_hash <> '') AS has_pin,
+		       created_at
 		FROM staff WHERE business_id = $1
 		ORDER BY display_name
 	`, tc.BusinessID)
@@ -133,12 +137,13 @@ func (s *Server) handleListStaff(w http.ResponseWriter, r *http.Request) {
 		DisplayName string     `json:"display_name"`
 		Role        string     `json:"role"`
 		Status      string     `json:"status"`
+		HasPIN      bool       `json:"has_pin"`
 		CreatedAt   any        `json:"created_at"`
 	}
 	var list []staff
 	for rows.Next() {
 		var st staff
-		if err := rows.Scan(&st.ID, &st.UserID, &st.DisplayName, &st.Role, &st.Status, &st.CreatedAt); err != nil {
+		if err := rows.Scan(&st.ID, &st.UserID, &st.DisplayName, &st.Role, &st.Status, &st.HasPIN, &st.CreatedAt); err != nil {
 			writeErr(w, http.StatusInternalServerError, "db_error", err.Error())
 			return
 		}
@@ -151,10 +156,11 @@ func (s *Server) handleListStaff(w http.ResponseWriter, r *http.Request) {
 }
 
 type createStaffBody struct {
-	DisplayName string       `json:"display_name"`
-	Role        string       `json:"role"`
-	UserID      *uuid.UUID   `json:"user_id"`
-	OutletIDs   []uuid.UUID  `json:"outlet_ids"`
+	DisplayName string      `json:"display_name"`
+	Role        string      `json:"role"`
+	UserID      *uuid.UUID  `json:"user_id"`
+	OutletIDs   []uuid.UUID `json:"outlet_ids"`
+	PIN         *string     `json:"pin"`
 }
 
 func (s *Server) handleCreateStaff(w http.ResponseWriter, r *http.Request) {
@@ -175,6 +181,17 @@ func (s *Server) handleCreateStaff(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "invalid_role", "role must be manager or cashier")
 		return
 	}
+
+	var pinHash *string
+	if body.PIN != nil && *body.PIN != "" {
+		h, err := authutil.HashStaffPIN(*body.PIN)
+		if err != nil {
+			writeErr(w, http.StatusBadRequest, "invalid_pin", err.Error())
+			return
+		}
+		pinHash = &h
+	}
+
 	ctx := r.Context()
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
@@ -185,10 +202,10 @@ func (s *Server) handleCreateStaff(w http.ResponseWriter, r *http.Request) {
 
 	var id uuid.UUID
 	err = tx.QueryRow(ctx, `
-		INSERT INTO staff (business_id, user_id, display_name, role, status)
-		VALUES ($1, $2, $3, $4, 'active')
+		INSERT INTO staff (business_id, user_id, display_name, role, status, pin_hash)
+		VALUES ($1, $2, $3, $4, 'active', $5)
 		RETURNING id
-	`, tc.BusinessID, body.UserID, body.DisplayName, body.Role).Scan(&id)
+	`, tc.BusinessID, body.UserID, body.DisplayName, body.Role, pinHash).Scan(&id)
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, "db_error", err.Error())
 		return
@@ -212,5 +229,133 @@ func (s *Server) handleCreateStaff(w http.ResponseWriter, r *http.Request) {
 		"id":           id,
 		"display_name": body.DisplayName,
 		"role":         body.Role,
+		"has_pin":      pinHash != nil,
 	})
+}
+
+type staffLoginBody struct {
+	StaffID uuid.UUID `json:"staff_id"`
+	PIN     string    `json:"pin"`
+}
+
+// POST /v1/staff/login — verify passcode and return staff identity (Square-style clock-in).
+func (s *Server) handleStaffLogin(w http.ResponseWriter, r *http.Request) {
+	tc := tenantFrom(r.Context())
+	var body staffLoginBody
+	if err := decodeJSON(r, &body); err != nil {
+		writeErr(w, http.StatusBadRequest, "invalid_body", badRequest(err))
+		return
+	}
+	if body.StaffID == uuid.Nil {
+		writeErr(w, http.StatusBadRequest, "invalid_staff", "staff_id is required")
+		return
+	}
+	if body.PIN == "" {
+		writeErr(w, http.StatusBadRequest, "invalid_pin", "pin is required")
+		return
+	}
+
+	var (
+		id          uuid.UUID
+		displayName string
+		role        string
+		status      string
+		pinHash     *string
+	)
+	err := s.pool.QueryRow(r.Context(), `
+		SELECT id, display_name, role, status, pin_hash
+		FROM staff
+		WHERE id = $1 AND business_id = $2
+	`, body.StaffID, tc.BusinessID).Scan(&id, &displayName, &role, &status, &pinHash)
+	if err != nil {
+		writeErr(w, http.StatusUnauthorized, "invalid_credentials", "incorrect passcode")
+		return
+	}
+	if status != "active" {
+		writeErr(w, http.StatusForbidden, "staff_disabled", "staff is disabled")
+		return
+	}
+	if pinHash == nil || *pinHash == "" {
+		writeErr(w, http.StatusForbidden, "pin_not_set", "this team member has no passcode yet — set one first")
+		return
+	}
+	if !authutil.CheckStaffPIN(*pinHash, body.PIN) {
+		writeErr(w, http.StatusUnauthorized, "invalid_credentials", "incorrect passcode")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"ok":           true,
+		"staff_id":     id,
+		"display_name": displayName,
+		"role":         role,
+	})
+}
+
+type setStaffPINBody struct {
+	PIN        string  `json:"pin"`
+	CurrentPIN *string `json:"current_pin"`
+}
+
+// POST /v1/staff/{id}/pin — set or change a team member passcode.
+// Allowed when: no PIN yet (bootstrap), or current_pin matches, or member is owner/admin/manager.
+func (s *Server) handleSetStaffPIN(w http.ResponseWriter, r *http.Request) {
+	tc := tenantFrom(r.Context())
+	id, err := uuid.Parse(r.PathValue("id"))
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, "invalid_id", "id must be UUID")
+		return
+	}
+	var body setStaffPINBody
+	if err := decodeJSON(r, &body); err != nil {
+		writeErr(w, http.StatusBadRequest, "invalid_body", badRequest(err))
+		return
+	}
+	hash, err := authutil.HashStaffPIN(body.PIN)
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, "invalid_pin", err.Error())
+		return
+	}
+
+	var (
+		existing *string
+		status   string
+	)
+	err = s.pool.QueryRow(r.Context(), `
+		SELECT pin_hash, status FROM staff WHERE id = $1 AND business_id = $2
+	`, id, tc.BusinessID).Scan(&existing, &status)
+	if err != nil {
+		writeErr(w, http.StatusNotFound, "not_found", "staff not found")
+		return
+	}
+	if status != "active" {
+		writeErr(w, http.StatusForbidden, "staff_disabled", "staff is disabled")
+		return
+	}
+
+	hasPIN := existing != nil && *existing != ""
+	isElevated := tc.MemberRole == "owner" || tc.MemberRole == "admin" || tc.MemberRole == "manager"
+	if hasPIN {
+		ok := false
+		if body.CurrentPIN != nil && authutil.CheckStaffPIN(*existing, *body.CurrentPIN) {
+			ok = true
+		}
+		if isElevated {
+			ok = true
+		}
+		if !ok {
+			writeErr(w, http.StatusForbidden, "forbidden", "current_pin required to change passcode")
+			return
+		}
+	}
+
+	_, err = s.pool.Exec(r.Context(), `
+		UPDATE staff SET pin_hash = $3, updated_at = now()
+		WHERE id = $1 AND business_id = $2
+	`, id, tc.BusinessID, hash)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, "db_error", err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "id": id, "has_pin": true})
 }
