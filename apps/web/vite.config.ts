@@ -19,7 +19,8 @@ export default defineConfig({
     port: 5173,
     proxy: {
       '/api': {
-        target: 'http://127.0.0.1:8080',
+        // Prefer MUTOPOS_API_URL; default 8088 when 8080 is taken by other sandboxes
+        target: process.env.MUTOPOS_API_URL ?? 'http://127.0.0.1:8088',
         changeOrigin: true,
         rewrite: (p) => p.replace(/^\/api/, ''),
       },
@@ -33,7 +34,7 @@ export default defineConfig({
     allowedHosts: true,
     proxy: {
       '/api': {
-        target: 'http://127.0.0.1:8080',
+        target: process.env.MUTOPOS_API_URL ?? 'http://127.0.0.1:8088',
         changeOrigin: true,
         rewrite: (p) => p.replace(/^\/api/, ''),
       },

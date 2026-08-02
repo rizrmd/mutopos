@@ -84,6 +84,7 @@ export function POSPage() {
   const [busy, setBusy] = useState(false)
   const [tickets, setTickets] = useState<LocalTicket[]>([])
   const [seededOnce, setSeededOnce] = useState(false)
+  const [seedHint, setSeedHint] = useState<string | null>(null)
 
   const staffName =
     staff.find((s) => s.id === staffId)?.display_name ?? 'Unassigned'
@@ -127,22 +128,34 @@ export function POSPage() {
           .catch(() => ({ categories: [] as Category[] })),
       ])
 
-      // Empty tenant → pull Vita demo catalog + floor staff once
-      if (
+      // Empty / thin catalog → pull Vita demo (idempotent server-side)
+      const needsDemo =
         !seededOnce &&
-        cats.categories.length === 0 &&
-        res.products.length === 0
-      ) {
+        (cats.categories.length === 0 || res.products.length < 5)
+      if (needsDemo) {
         try {
-          await api.seedDemo(tenant)
+          setSeedHint('Loading demo menu…')
+          const seeded = await api.seedDemo(tenant)
           setSeededOnce(true)
           await refreshTenantData()
           ;[res, cats] = await Promise.all([
             api.listProducts(tenant),
             api.listCategories(tenant),
           ])
-        } catch {
-          // non-fatal — user can add catalog manually
+          if (seeded.demo?.catalog_seeded || res.products.length > 0) {
+            setSeedHint(null)
+          } else {
+            setSeedHint(
+              'Demo already applied or API missing /v1/demo/seed — restart API and refresh.',
+            )
+          }
+        } catch (e) {
+          setSeededOnce(true)
+          setSeedHint(
+            e instanceof Error
+              ? `Demo seed failed: ${e.message}`
+              : 'Demo seed failed — is the API on the latest build?',
+          )
         }
       }
 
@@ -155,6 +168,7 @@ export function POSPage() {
         (c) => c.name.toLowerCase() === 'oysters',
       )
       if (oysters) setSelectedCategory(oysters.id)
+      else if (cats.categories[0]) setSelectedCategory(cats.categories[0].id)
     } catch {
       const db = await getDb()
       const local = await db.products
@@ -485,10 +499,26 @@ export function POSPage() {
                 )
               })}
               {filteredProducts.length === 0 ? (
-                <p className="col-span-full py-12 text-center text-sm text-muted-foreground">
-                  No products. Demo seed runs automatically, or add items in
-                  Catalog.
-                </p>
+                <div className="col-span-full flex flex-col items-center gap-3 py-12 text-center">
+                  <p className="text-sm text-muted-foreground">
+                    {seedHint ??
+                      'No products. Demo seed runs automatically, or add items in Catalog.'}
+                  </p>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="rounded-full"
+                    disabled={busy}
+                    onClick={() => {
+                      setSeededOnce(false)
+                      setSeedHint(null)
+                      void load()
+                    }}
+                  >
+                    Load demo menu
+                  </Button>
+                </div>
               ) : null}
             </div>
           </div>
