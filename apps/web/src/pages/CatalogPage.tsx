@@ -130,7 +130,7 @@ export function CatalogPage() {
             <span
               key={c.id}
               className={cn(
-                'rounded-xl px-3 py-2 text-sm font-semibold text-foreground/90',
+                'rounded-none px-3 py-2 text-sm font-semibold text-foreground/90',
                 TILES[i % TILES.length],
               )}
             >

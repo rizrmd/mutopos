@@ -480,7 +480,7 @@ export function POSPage() {
                   type="button"
                   onClick={() => setSelectedCategory(tile.id)}
                   className={cn(
-                    'min-h-[4.75rem] rounded-[14px] px-4 py-3.5 text-left transition-all',
+                    'min-h-[4.75rem] rounded-none px-4 py-3.5 text-left transition-all',
                     tile.pastel,
                     active
                       ? 'shadow-sm ring-2 ring-foreground/12'
@@ -509,7 +509,7 @@ export function POSPage() {
                 <div
                   key={p.id}
                   className={cn(
-                    'relative flex min-h-[5.5rem] flex-col rounded-[14px] border bg-card px-3 py-2.5 shadow-sm transition',
+                    'relative flex min-h-[5.5rem] flex-col rounded-none border bg-card px-3 py-2.5 shadow-sm transition',
                     qty > 0
                       ? 'border-primary/25 ring-1 ring-primary/10'
                       : 'border-border hover:border-foreground/10',
@@ -538,7 +538,7 @@ export function POSPage() {
                     type="button"
                     aria-label={`Add ${p.name}`}
                     onClick={() => addToCart(p)}
-                    className="absolute right-2 top-2 flex size-6 items-center justify-center rounded-md text-muted-foreground transition hover:bg-muted hover:text-foreground"
+                    className="absolute right-2 top-2 flex size-6 items-center justify-center rounded-none text-muted-foreground transition hover:bg-muted hover:text-foreground"
                   >
                     <Plus className="size-3.5 stroke-[2.5]" />
                   </button>
@@ -550,7 +550,7 @@ export function POSPage() {
                     disabled={qty === 0}
                     onClick={() => changeQty(p.id, -1)}
                     className={cn(
-                      'absolute bottom-2 right-2 flex size-6 items-center justify-center rounded-md transition',
+                      'absolute bottom-2 right-2 flex size-6 items-center justify-center rounded-none transition',
                       qty > 0
                         ? 'text-muted-foreground hover:bg-muted hover:text-foreground'
                         : 'text-muted-foreground/30',
@@ -571,7 +571,7 @@ export function POSPage() {
                   type="button"
                   size="sm"
                   variant="outline"
-                  className="rounded-full"
+                  className="rounded-none"
                   disabled={busy}
                   onClick={() => {
                     setSeededOnce(false)
@@ -600,11 +600,11 @@ export function POSPage() {
                 return (
                   <div
                     key={t.id}
-                    className="flex h-[3.25rem] min-w-[13.5rem] items-center gap-2 rounded-xl border border-border bg-card px-2 shadow-sm"
+                    className="flex h-[3.25rem] min-w-[13.5rem] items-center gap-2 rounded-none border border-border bg-card px-2 shadow-sm"
                   >
                     <span
                       className={cn(
-                        'flex size-8 shrink-0 items-center justify-center rounded-lg text-[11px] font-bold text-white',
+                        'flex size-8 shrink-0 items-center justify-center rounded-none text-[11px] font-bold text-white',
                         TICKET_TINTS[i % TICKET_TINTS.length],
                       )}
                     >
@@ -620,7 +620,7 @@ export function POSPage() {
                         </span>
                         <span
                           className={cn(
-                            'inline-flex shrink-0 items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[9px] font-semibold',
+                            'inline-flex shrink-0 items-center gap-0.5 rounded-none px-1.5 py-0.5 text-[9px] font-semibold',
                             ready
                               ? 'bg-emerald-50 text-emerald-700'
                               : 'bg-sky-50 text-sky-700',
@@ -637,7 +637,7 @@ export function POSPage() {
                         <span className="inline-flex items-center gap-1">
                           <span
                             className={cn(
-                              'size-1.5 rounded-sm',
+                              'size-1.5 rounded-none',
                               station.startsWith('Kitchen')
                                 ? 'bg-blue-500'
                                 : 'bg-violet-400',
@@ -735,7 +735,7 @@ export function POSPage() {
                         <div className="flex items-start justify-between gap-2">
                           <span className="flex min-w-0 items-center gap-1.5 font-medium leading-snug">
                             <span className="truncate">{l.name}</span>
-                            <span className="inline-flex size-4 shrink-0 items-center justify-center rounded-full bg-muted text-[9px] font-semibold text-muted-foreground">
+                            <span className="inline-flex size-4 shrink-0 items-center justify-center rounded-none bg-muted text-[9px] font-semibold text-muted-foreground">
                               {course}
                             </span>
                           </span>
@@ -764,7 +764,7 @@ export function POSPage() {
                           <div className="flex items-center gap-1">
                             <button
                               type="button"
-                              className="flex size-6 items-center justify-center rounded-md border border-border text-muted-foreground hover:bg-muted"
+                              className="flex size-6 items-center justify-center rounded-none border border-border text-muted-foreground hover:bg-muted"
                               onClick={() => changeQty(l.productId, -1)}
                             >
                               <Minus className="size-3" />
@@ -774,7 +774,7 @@ export function POSPage() {
                             </span>
                             <button
                               type="button"
-                              className="flex size-6 items-center justify-center rounded-md border border-border text-muted-foreground hover:bg-muted"
+                              className="flex size-6 items-center justify-center rounded-none border border-border text-muted-foreground hover:bg-muted"
                               onClick={() => changeQty(l.productId, 1)}
                             >
                               <Plus className="size-3" />
@@ -821,10 +821,10 @@ export function POSPage() {
               )}
             >
               <span className="grid grid-cols-2 gap-px">
-                <span className="size-1 rounded-[1px] bg-current" />
-                <span className="size-1 rounded-[1px] bg-current" />
-                <span className="size-1 rounded-[1px] bg-current" />
-                <span className="size-1 rounded-[1px] bg-current" />
+                <span className="size-1 rounded-none bg-current" />
+                <span className="size-1 rounded-none bg-current" />
+                <span className="size-1 rounded-none bg-current" />
+                <span className="size-1 rounded-none bg-current" />
               </span>
               Add amount
               {extraAmountMinor > 0 ? (
@@ -870,7 +870,7 @@ export function POSPage() {
           <div className="px-4 pb-4">
             <Button
               type="button"
-              className="h-11 w-full rounded-full text-sm font-semibold"
+              className="h-11 w-full rounded-none text-sm font-semibold"
               disabled={busy || cart.length === 0 || !outletId}
               onClick={() => void checkout()}
             >

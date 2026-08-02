@@ -126,7 +126,7 @@ export function AppShell() {
         <div className="flex items-start gap-2.5 px-3.5 pb-3 pt-4">
           <button
             type="button"
-            className="mt-0.5 rounded-md p-1 text-muted-foreground hover:bg-muted"
+            className="mt-0.5 rounded-none p-1 text-muted-foreground hover:bg-muted"
             onClick={() => setSidebarOpen(false)}
             aria-label="Collapse sidebar"
           >
@@ -149,7 +149,7 @@ export function AppShell() {
           </div>
           <button
             type="button"
-            className="flex size-7 items-center justify-center rounded-lg border border-border text-muted-foreground hover:bg-muted"
+            className="flex size-7 items-center justify-center rounded-none border border-border text-muted-foreground hover:bg-muted"
             aria-label="Add menu"
             title="Business / outlet scope"
             onClick={() => setScopeOpen((v) => !v)}
@@ -159,12 +159,12 @@ export function AppShell() {
         </div>
 
         {scopeOpen ? (
-          <div className="mx-2 mb-2 space-y-2 rounded-xl border border-border bg-card p-2.5">
+          <div className="mx-2 mb-2 space-y-2 rounded-none border border-border bg-card p-2.5">
             <label className="block text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
               Business
             </label>
             <select
-              className="h-8 w-full rounded-lg border border-border bg-background px-2 text-xs"
+              className="h-8 w-full rounded-none border border-border bg-background px-2 text-xs"
               value={businessId ?? ''}
               onChange={(e) => setBusinessId(e.target.value)}
               aria-label="Business"
@@ -179,7 +179,7 @@ export function AppShell() {
               Outlet
             </label>
             <select
-              className="h-8 w-full rounded-lg border border-border bg-background px-2 text-xs"
+              className="h-8 w-full rounded-none border border-border bg-background px-2 text-xs"
               value={outletId ?? ''}
               onChange={(e) => setOutletId(e.target.value)}
               aria-label="Outlet"
@@ -204,7 +204,7 @@ export function AppShell() {
               end={end}
               className={({ isActive }) =>
                 cn(
-                  'flex items-center gap-2.5 rounded-xl px-2.5 py-2.5 text-sm transition-colors',
+                  'flex items-center gap-2.5 rounded-none px-2.5 py-2.5 text-sm transition-colors',
                   isActive
                     ? 'bg-emerald-50/90 ring-1 ring-emerald-100'
                     : 'hover:bg-muted/70',
@@ -213,7 +213,7 @@ export function AppShell() {
             >
               <span
                 className={cn(
-                  'flex size-8 shrink-0 items-center justify-center rounded-full text-xs font-semibold',
+                  'flex size-8 shrink-0 items-center justify-center rounded-none text-xs font-semibold',
                   tint,
                 )}
               >
@@ -226,7 +226,7 @@ export function AppShell() {
                     <>
                       <span
                         className={cn(
-                          'size-1.5 rounded-full',
+                          'size-1.5 rounded-none',
                           online ? 'bg-emerald-500' : 'bg-amber-500',
                         )}
                       />
@@ -240,7 +240,7 @@ export function AppShell() {
                     </>
                   ) : (
                     <>
-                      <span className="size-1.5 rounded-full bg-muted-foreground/40" />
+                      <span className="size-1.5 rounded-none bg-muted-foreground/40" />
                       <span>Offline</span>
                     </>
                   )}
@@ -317,7 +317,7 @@ export function AppShell() {
                   type="button"
                   onClick={() => setStaffId(s.id)}
                   className={cn(
-                    'inline-flex shrink-0 items-center gap-1.5 rounded-full py-1 pl-1 pr-2.5 text-xs font-medium transition-colors',
+                    'inline-flex shrink-0 items-center gap-1.5 rounded-none py-1 pl-1 pr-2.5 text-xs font-medium transition-colors',
                     active
                       ? 'bg-violet-50 text-violet-900 ring-1 ring-violet-100'
                       : 'bg-transparent text-muted-foreground hover:bg-muted/80 hover:text-foreground',
@@ -325,7 +325,7 @@ export function AppShell() {
                 >
                   <span
                     className={cn(
-                      'flex size-6 items-center justify-center rounded-full text-[10px] font-semibold',
+                      'flex size-6 items-center justify-center rounded-none text-[10px] font-semibold',
                       avatarTints[i % avatarTints.length],
                     )}
                   >
@@ -350,7 +350,7 @@ export function AppShell() {
                       if (!search) setSearchOpen(false)
                     }}
                     placeholder="Search items…"
-                    className="h-9 w-44 rounded-full border-border bg-muted/40 pl-8 pr-8 text-sm"
+                    className="h-9 w-44 rounded-none border-border bg-muted/40 pl-8 pr-8 text-sm"
                   />
                   <button
                     type="button"
@@ -369,7 +369,7 @@ export function AppShell() {
                   type="button"
                   size="icon"
                   variant="ghost"
-                  className="size-9 rounded-full text-muted-foreground"
+                  className="size-9 rounded-none text-muted-foreground"
                   onClick={() => setSearchOpen(true)}
                   aria-label="Search items"
                 >
@@ -381,7 +381,7 @@ export function AppShell() {
             <button
               type="button"
               onClick={() => void logout()}
-              className="hidden items-center gap-2 rounded-full py-1 pl-2 pr-1 sm:flex"
+              className="hidden items-center gap-2 rounded-none py-1 pl-2 pr-1 sm:flex"
               title="Sign out"
             >
               <div className="text-right leading-tight">
@@ -390,7 +390,7 @@ export function AppShell() {
                   Clocked in {clockLabel}
                 </div>
               </div>
-              <span className="flex size-8 items-center justify-center rounded-full bg-violet-100 text-xs font-semibold text-violet-800">
+              <span className="flex size-8 items-center justify-center rounded-none bg-violet-100 text-xs font-semibold text-violet-800">
                 {accountInitials.slice(0, 1)}
               </span>
             </button>
