@@ -142,6 +142,14 @@
     border-radius: 0 !important;
   }
 
+  /* Vita-style staff/account chips — soft pills + circular avatars */
+  .ui-pill {
+    border-radius: 9999px !important;
+  }
+  .ui-avatar {
+    border-radius: 9999px !important;
+  }
+
   .pos-scroll::-webkit-scrollbar {
     width: 8px;
     height: 8px;

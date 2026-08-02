@@ -452,18 +452,20 @@ export function POSPage() {
           </div>
         </section>
 
-        {/* Right ticket */}
+        {/* Right ticket — Vita-style order panel */}
         <aside className="flex w-80 shrink-0 flex-col border-l border-border bg-card xl:w-[22rem]">
           <div className="flex items-start justify-between gap-2 border-b border-border px-3 py-3">
-            <div>
-              <div className="text-sm font-bold">{outletName}</div>
-              <div className="text-xs text-muted-foreground">{staffName}</div>
+            <div className="min-w-0">
+              <div className="truncate text-sm font-bold">{outletName}</div>
+              <div className="truncate text-xs text-muted-foreground">
+                {staffName}
+              </div>
             </div>
             <Button
               type="button"
               size="icon"
               variant="ghost"
-              className="size-8 text-muted-foreground"
+              className="size-8 shrink-0 text-muted-foreground"
               title="Clear cart"
               onClick={clearCart}
               disabled={cart.length === 0}

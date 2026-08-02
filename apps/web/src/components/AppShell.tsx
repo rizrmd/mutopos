@@ -20,6 +20,15 @@ const nav = [
   { to: '/receipts', label: 'Receipts', icon: Receipt },
 ]
 
+const avatarTints = [
+  'bg-sky-100 text-sky-800',
+  'bg-violet-100 text-violet-800',
+  'bg-amber-100 text-amber-900',
+  'bg-rose-100 text-rose-800',
+  'bg-emerald-100 text-emerald-800',
+  'bg-orange-100 text-orange-900',
+]
+
 function initials(name: string | null | undefined, fallback = '?') {
   if (!name?.trim()) return fallback
   const parts = name.trim().split(/\s+/)
@@ -55,9 +64,27 @@ export function AppShell() {
     [memberships, businessId],
   )
 
-  const activeStaff = staff.find((s) => s.id === staffId)
   const isPos = location.pathname === '/'
   const pending = stats?.pending ?? 0
+
+  // Logged-in account identity (Vita: "David Ross") — not the selected staff chip.
+  const accountName =
+    user?.display_name?.trim() || user?.phone_e164 || 'Account'
+  const accountInitials = initials(user?.display_name ?? user?.phone_e164, 'U')
+
+  // Staff picker only when there is a real choice (avoids duplicate "Owner" badge).
+  const showStaffPicker = staff.length > 1
+
+  const pageTitle = isPos
+    ? 'Menu'
+    : location.pathname.startsWith('/catalog')
+      ? 'Catalog'
+      : 'Receipts'
+  const pageSubtitle = isPos
+    ? 'Items · tap to order'
+    : location.pathname.startsWith('/catalog')
+      ? 'Products & categories'
+      : 'Sales history'
 
   return (
     <div className="flex h-svh overflow-hidden bg-background text-foreground">
@@ -82,7 +109,6 @@ export function AppShell() {
           </div>
         </div>
 
-        {/* Compact context selectors — square, high contrast */}
         <div className="space-y-2 border-b border-border p-3">
           <select
             className="h-9 w-full border border-border bg-background px-2 text-sm font-medium text-foreground"
@@ -148,7 +174,12 @@ export function AppShell() {
 
       {/* Main */}
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex h-12 shrink-0 items-center gap-3 border-b border-border bg-card px-3">
+        {/*
+          Vita-style header:
+          [title + subtitle] | [staff chips centered when multi] | [search] [account] [sign out]
+          Account = logged-in user only — never re-renders selected staff as a second badge.
+        */}
+        <header className="flex h-14 shrink-0 items-center gap-3 border-b border-border bg-card px-3">
           {!sidebarOpen ? (
             <Button
               type="button"
@@ -162,75 +193,68 @@ export function AppShell() {
             </Button>
           ) : null}
 
-          <div className="min-w-0">
-            <div className="truncate text-sm font-semibold">
-              {isPos
-                ? 'Menu'
-                : location.pathname.startsWith('/catalog')
-                  ? 'Catalog'
-                  : 'Receipts'}
+          <div className="min-w-0 shrink-0">
+            <div className="truncate text-sm font-semibold leading-tight">
+              {pageTitle}
+            </div>
+            <div className="truncate text-[11px] text-muted-foreground">
+              {pageSubtitle}
             </div>
           </div>
 
-          {/* Staff picker — flat chips */}
-          <div className="ml-2 hidden min-w-0 flex-1 items-center gap-1 overflow-x-auto md:flex pos-scroll">
-            {staff.map((s) => {
-              const active = s.id === staffId
-              return (
-                <button
-                  key={s.id}
-                  type="button"
-                  onClick={() => setStaffId(s.id)}
-                  className={cn(
-                    'inline-flex shrink-0 items-center gap-1.5 border px-2 py-1 text-xs font-medium transition-colors',
-                    active
-                      ? 'border-foreground bg-foreground text-background'
-                      : 'border-border bg-card text-foreground hover:bg-muted',
-                  )}
-                >
-                  <span
-                    className={cn(
-                      'flex size-5 items-center justify-center text-[10px] font-bold',
-                      active
-                        ? 'bg-background text-foreground'
-                        : 'bg-muted text-foreground',
-                    )}
-                  >
-                    {initials(s.display_name)}
-                  </span>
-                  {s.display_name}
-                </button>
-              )
-            })}
+          {/* Staff chips — only when switching between people is useful */}
+          <div className="hidden min-w-0 flex-1 items-center justify-center gap-1.5 overflow-x-auto md:flex pos-scroll">
+            {showStaffPicker
+              ? staff.map((s, i) => {
+                  const active = s.id === staffId
+                  return (
+                    <button
+                      key={s.id}
+                      type="button"
+                      onClick={() => setStaffId(s.id)}
+                      className={cn(
+                        'ui-pill inline-flex shrink-0 items-center gap-1.5 border px-2.5 py-1 text-xs font-medium transition-colors',
+                        active
+                          ? 'border-violet-200 bg-violet-50 text-violet-900'
+                          : 'border-transparent bg-muted/80 text-muted-foreground hover:bg-muted hover:text-foreground',
+                      )}
+                    >
+                      <span
+                        className={cn(
+                          'ui-avatar flex size-5 items-center justify-center text-[10px] font-semibold',
+                          avatarTints[i % avatarTints.length],
+                        )}
+                      >
+                        {initials(s.display_name)}
+                      </span>
+                      {s.display_name}
+                    </button>
+                  )
+                })
+              : null}
           </div>
 
-          <div className="ml-auto flex items-center gap-2">
+          <div className="ml-auto flex shrink-0 items-center gap-2">
             {isPos ? (
               <div className="relative hidden sm:block">
-                <Search className="pointer-events-none absolute left-2 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+                <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
                 <Input
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   placeholder="Search…"
-                  className="h-8 w-40 border-border bg-background pl-7 text-sm lg:w-52"
+                  className="h-9 w-40 border-border bg-muted/40 pl-8 text-sm lg:w-52"
                 />
               </div>
             ) : null}
 
-            <div className="hidden items-center gap-2 border border-border bg-background px-2 py-1 sm:flex">
+            {/* Account identity only — not selected staff */}
+            <div className="ui-pill hidden items-center gap-2 border border-border bg-background px-2.5 py-1 sm:flex">
               <div className="text-right leading-tight">
-                <div className="text-xs font-semibold">
-                  {activeStaff?.display_name ??
-                    user?.display_name ??
-                    user?.phone_e164 ??
-                    'Staff'}
-                </div>
+                <div className="text-xs font-semibold">{accountName}</div>
+                <div className="text-[10px] text-muted-foreground">Signed in</div>
               </div>
-              <span className="flex size-7 items-center justify-center bg-foreground text-[10px] font-bold text-background">
-                {initials(
-                  activeStaff?.display_name ?? user?.display_name,
-                  'U',
-                )}
+              <span className="ui-avatar flex size-8 items-center justify-center bg-violet-100 text-xs font-semibold text-violet-800">
+                {accountInitials}
               </span>
             </div>
 
