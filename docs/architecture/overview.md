@@ -19,7 +19,7 @@ MutoPOS is a **point-of-sale (POS)** product that must keep working when connect
 │  Repository / adapter layer  ◄── thin; hides store vendor   │
 │       │                                                     │
 │       ▼                                                     │
-│  Local store (default: RxDB)  +  Outbox collection          │
+│  Local store (default: TinyBase)  +  Outbox table           │
 │       │                                                     │
 │       │  push when online                                   │
 │       ▼                                                     │
@@ -57,7 +57,7 @@ MutoPOS is a **point-of-sale (POS)** product that must keep working when connect
 2. **Provisional vs committed** — client state is optimistic until the Go API accepts it.
 3. **Server wins on conflict** — Go + Postgres own final truth; client merges or rewrites from server responses / pull snapshots.
 4. **No vendor Postgres-sync** — we do not pipe Postgres change streams through PowerSync, ElectricSQL, or similar into the client. Sync is **application-level**: custom outbox + API contracts.
-5. **Adapter isolation** — domain code talks to repositories, not RxDB (or Dexie) APIs directly.
+5. **Adapter isolation** — domain code talks to repositories, not TinyBase APIs directly.
 
 ## Why not client-only truth?
 
@@ -65,7 +65,9 @@ POS data (inventory, prices, multi-device cashiers, refunds) must not diverge pe
 
 ## Related docs
 
+- [SaaS ERD (entities, multi-tenant, outbox tables)](../erd.md)
 - [ADR 0001 — Offline-first + custom outbox](./adr/0001-offline-first-custom-outbox.md)
-- [Local store (RxDB default)](./local-store.md)
+- [Local store (TinyBase default)](./local-store.md)
 - [Outbox & sync path](./outbox-sync.md)
-- [ADR 0002 — RxDB default](./adr/0002-rxdb-default-local-store.md)
+- [ADR 0003 — TinyBase default](./adr/0003-tinybase-default-local-store.md)
+- [ADR 0002 — RxDB (superseded)](./adr/0002-rxdb-default-local-store.md)

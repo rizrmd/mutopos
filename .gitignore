@@ -1,0 +1,41 @@
+# Environment / secrets
+.env
+.env.local
+.env.*.local
+apps/api/.env
+apps/web/.env
+apps/web/.env.*
+
+# OS / editors
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*~
+
+# Go
+apps/api/bin/
+apps/api/tmp/
+*.exe
+*.test
+*.out
+vendor/
+
+# Node / web
+node_modules/
+apps/web/dist/
+apps/web/node_modules/
+*.tsbuildinfo
+.npm
+.vite/
+
+# Logs / coverage
+*.log
+coverage/
+.nyc_output/
+
+# Misc
+tmp/
+.cache/
+.fural-clipboard/

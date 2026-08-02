@@ -1,8 +1,9 @@
 # ADR 0002: RxDB as default client local store
 
-- **Status:** Accepted  
+- **Status:** Superseded by [ADR 0003](./0003-tinybase-default-local-store.md)  
 - **Date:** 2026-08-02  
-- **Deciders:** MutoPOS room / lobby (confirmed for implementation docs)
+- **Deciders:** MutoPOS room / lobby (confirmed for implementation docs)  
+- **Note:** Historical decision. Client local store default is now **TinyBase**.
 
 ## Context
 

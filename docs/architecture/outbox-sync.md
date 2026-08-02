@@ -24,7 +24,7 @@ Reasons: lock-in, blurred conflict ownership, and mismatch with “commands + do
         ▼
 [Domain use-case]
   • validate locally (best-effort)
-  • write optimistic local state (RxDB via repository)
+  • write optimistic local state (TinyBase via repository)
   • append OutboxEntry (durable)
         │
         ▼
@@ -51,7 +51,7 @@ Pull (server → client) is separate: snapshots or deltas via normal Go endpoint
 | `attempts` | Retry count |
 | `lastError` | Optional diagnostics |
 
-Persist outbox in the **same local store** as cart data (RxDB collection by default) so a crash does not drop unpaid or unsynced work.
+Persist outbox in the **same local store** as cart data (TinyBase `outbox` table by default) so a crash does not drop unpaid or unsynced work.
 
 ## Push path (client → Go)
 
@@ -92,9 +92,9 @@ Client may use versions / etags if the API provides them; **merge policy is serv
 | Schema command v1 vs v2 | Version field on entry; Go supports or rejects clearly |
 | Partial multi-command sale | Prefer single command for “complete sale” or explicit saga; document command boundaries in API design |
 
-## Relation to RxDB
+## Relation to TinyBase
 
-RxDB holds outbox documents and reactive “pending sync” badges in the UI. It is **storage + reactivity**, not the conflict engine. See [local-store.md](./local-store.md).
+TinyBase holds outbox rows and drives reactive “pending sync” badges in the UI (table listeners). It is **storage + reactivity**, not the conflict engine. See [local-store.md](./local-store.md).
 
 ## Checklist for implementers
 
@@ -106,6 +106,7 @@ RxDB holds outbox documents and reactive “pending sync” badges in the UI. It
 
 ## Related
 
+- [SaaS ERD — `command_receipts`, devices, client vs server](../erd.md)  
 - [ADR 0001](./adr/0001-offline-first-custom-outbox.md)  
 - [Overview](./overview.md)  
 - [Local store](./local-store.md)  
