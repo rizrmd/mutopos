@@ -4,12 +4,12 @@
 
 This document defines the **logical data model** for MutoPOS as a multi-tenant SaaS POS: tenants (**Business**), WhatsApp phone login for owners, outlets and staff, catalog, sales (**transaksi**), and tables that support the **custom outbox** sync path.
 
-It is the schema-facing companion to the architecture docs under [`architecture/`](./architecture/). **Postgres** (via the Go API) is the system of record. The client keeps a subset of documents offline (default **RxDB**) and pushes mutations through a **custom outbox** — not PowerSync, ElectricSQL, or other vendor Postgres-sync products.
+It is the schema-facing companion to the architecture docs under [`architecture/`](./architecture/). **Postgres** (via the Go API) is the system of record. The client keeps a subset of documents offline (default **TinyBase**) and pushes mutations through a **custom outbox** — not PowerSync, ElectricSQL, or other vendor Postgres-sync products.
 
 | Audience | Use |
 |----------|-----|
 | Backend (Go + Postgres) | Table design, tenant isolation, idempotency |
-| Client (RxDB + repositories) | Which entities are cached offline vs server-only |
+| Client (TinyBase + repositories) | Which entities are cached offline vs server-only |
 | Product / implementers | Shared vocabulary for F&B and retail POS |
 
 **Non-goals:** UI mockups, full RBAC matrices beyond practical POS roles, inventory purchasing/accounting modules, loyalty, multi-currency treasury, or any feature outside this scoped model.
@@ -19,9 +19,9 @@ It is the schema-facing companion to the architecture docs under [`architecture/
 | Decision | Where documented | Implication for this ERD |
 |----------|------------------|---------------------------|
 | Offline-first POS | [ADR 0001](./architecture/adr/0001-offline-first-custom-outbox.md) | Sales and catalog snapshots exist client-side; server remains authority after sync |
-| Custom outbox → Go → Postgres | [outbox-sync.md](./architecture/outbox-sync.md) | Server stores **idempotency / command receipts**; client outbox is local, not a Postgres replica of RxDB |
+| Custom outbox → Go → Postgres | [outbox-sync.md](./architecture/outbox-sync.md) | Server stores **idempotency / command receipts**; client outbox is local, not a Postgres replica of the client store |
 | Domain & conflicts in Go | [overview.md](./architecture/overview.md) | Stock, price rules, void/refund validity enforced server-side |
-| RxDB default local store | [ADR 0002](./architecture/adr/0002-rxdb-default-local-store.md), [local-store.md](./architecture/local-store.md) | ERD names server tables; client collections are a **subset** behind repositories |
+| TinyBase default local store | [ADR 0003](./architecture/adr/0003-tinybase-default-local-store.md), [local-store.md](./architecture/local-store.md) | ERD names server tables; client collections are a **subset** behind repositories |
 | No PowerSync / Electric | ADR 0001 | No logical-replication-to-client tables or vendor sync metadata as product path |
 
 ### Naming
@@ -33,7 +33,7 @@ It is the schema-facing companion to the architecture docs under [`architecture/
 | **User** | Platform identity keyed primarily by **WhatsApp phone (E.164)** |
 | **Staff** | Business-scoped person who can operate POS (linked to a user when they log in) |
 | **Sale / transaksi** | A POS sale document; UI copy may say *transaksi*; tables use `sale` / `sale_line` |
-| **Outbox (client)** | Durable pending commands in RxDB (see architecture) |
+| **Outbox (client)** | Durable pending commands in TinyBase (see architecture) |
 | **Command receipt (server)** | Idempotent record of an applied client command |
 
 Money is stored as **integer minor units** (e.g. rupiah as whole IDR without decimals, or cents if a currency needs them). Default product currency assumption for Indonesia: **IDR**, zero decimal places, column `amount_minor BIGINT`.
@@ -62,7 +62,7 @@ Money is stored as **integer minor units** (e.g. rupiah as whole IDR without dec
 
 ## Mermaid ER diagram
 
-Logical relationships (cardinality simplified). Server-only auth tables included; client RxDB outbox is **not** a Postgres table.
+Logical relationships (cardinality simplified). Server-only auth tables included; client TinyBase outbox is **not** a Postgres table.
 
 ```mermaid
 erDiagram
@@ -541,7 +541,7 @@ Split tender: multiple `payments` rows per `sale`. Sum should equal `sales.total
 
 ## Domain: devices, pull cursors, custom outbox support
 
-Client **outbox documents** live in RxDB (see [outbox-sync.md](./architecture/outbox-sync.md)): `id`, `type`, `payload`, `createdAt`, `status`, `attempts`, `lastError`. They are **not** mirrored row-for-row into Postgres.
+Client **outbox documents** live in TinyBase (see [outbox-sync.md](./architecture/outbox-sync.md)): `id`, `type`, `payload`, `createdAt`, `status`, `attempts`, `lastError`. They are **not** mirrored row-for-row into Postgres.
 
 Server tables below make push **safe and multi-device aware**.
 
@@ -603,7 +603,7 @@ Pull is **not** a substitute for outbox push of local commands ([outbox-sync.md]
 
 ### Client collections vs server tables
 
-| Client (RxDB, illustrative) | Server (Postgres) | Notes |
+| Client (TinyBase, illustrative) | Server (Postgres) | Notes |
 |-----------------------------|-------------------|--------|
 | `products`, `categories`, prices cache | `products`, `categories`, `product_prices` | Pull/cache |
 | `stock_lines` | `stock_levels` | Optimistic local; server authoritative |
@@ -686,6 +686,6 @@ Online-only admin HTTP for catalog is fine; offline-critical path is **sales + s
 - [Documentation home](./README.md)  
 - [Architecture overview](./architecture/overview.md)  
 - [Outbox & sync](./architecture/outbox-sync.md)  
-- [Local store (RxDB)](./architecture/local-store.md)  
+- [Local store (TinyBase)](./architecture/local-store.md)  
 - [ADR 0001 — custom outbox](./architecture/adr/0001-offline-first-custom-outbox.md)  
-- [ADR 0002 — RxDB default](./architecture/adr/0002-rxdb-default-local-store.md)  
+- [ADR 0003 — TinyBase default](./architecture/adr/0003-tinybase-default-local-store.md)  

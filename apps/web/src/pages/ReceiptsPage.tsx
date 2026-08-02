@@ -10,7 +10,7 @@ import {
   CardTitle,
 } from '@/components/ui/card'
 import { api, formatMoney, type Sale } from '@/lib/api'
-import { getDb } from '@/lib/db'
+import { listLocalSales } from '@/lib/db'
 import { useSession } from '@/lib/session'
 import { cn } from '@/lib/utils'
 
@@ -42,10 +42,7 @@ export function ReceiptsPage() {
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     }
-    const db = await getDb()
-    const local = await db.sales
-      .find({ selector: { businessId }, sort: [{ createdAt: 'desc' }] })
-      .exec()
+    const local = await listLocalSales(businessId)
     setLocalPending(
       local.map((d) => ({
         id: d.clientSaleId,

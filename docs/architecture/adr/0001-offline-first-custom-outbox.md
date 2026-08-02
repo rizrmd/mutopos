@@ -33,7 +33,7 @@ We also need a clear answer to: *who owns conflicts?* Client libraries with “m
 - Full control over sales/inventory rules and conflict policy in one place (Go).
 - No dependency on a sync vendor’s pricing, protocol, or Postgres extensions for the core path.
 - Clear mental model: outbox = “commands not yet accepted by the server.”
-- Works with any client local store (RxDB default; Dexie alternative) as long as outbox is durable.
+- Works with any client local store (TinyBase default; see ADR 0003) as long as outbox is durable.
 
 ### Negative / tradeoffs
 
@@ -44,7 +44,7 @@ We also need a clear answer to: *who owns conflicts?* Client libraries with “m
 ### Explicit non-goals of this ADR
 
 - Specifying every command schema or HTTP route (see [outbox-sync.md](../outbox-sync.md) for the pattern).
-- Choosing RxDB vs Dexie (see [ADR 0002](./0002-rxdb-default-local-store.md)).
+- Choosing the client store vendor (see [ADR 0003](./0003-tinybase-default-local-store.md); historical [ADR 0002](./0002-rxdb-default-local-store.md)).
 
 ## Alternatives rejected
 

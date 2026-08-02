@@ -4,7 +4,7 @@ Offline-first multi-tenant POS (point of sale).
 
 | Layer | Stack | Role |
 |-------|--------|------|
-| **Client** | Vite + React + shadcn/ui + **RxDB** (`apps/web`) | POS UI, local store, **custom outbox** |
+| **Client** | Vite + React + shadcn/ui + **TinyBase** (`apps/web`) | POS UI, local store, **custom outbox** |
 | **API** | Go + PostgreSQL (`apps/api`) | Auth, domain rules, authoritative writes, `command_receipts` |
 | **Docs** | [`docs/`](./docs/) | Architecture (offline/outbox) + SaaS ERD |
 
@@ -16,7 +16,7 @@ Offline-first multi-tenant POS (point of sale).
 mutopos/
   apps/
     api/          Go HTTP API + SQL migrations (ERD)
-    web/          Vite React TypeScript + shadcn + RxDB outbox
+    web/          Vite React TypeScript + shadcn + TinyBase outbox
   docs/
     architecture/ Offline-first + custom outbox ADRs
     erd.md        Multi-tenant Business, WA login, catalog, transaksi
@@ -148,26 +148,26 @@ Dev proxy: `/api/*` → `http://127.0.0.1:8080/*` (`apps/web/vite.config.ts`).
 
 1. **Login** — phone E.164 + OTP stub  
 2. **Tenant context** — business / outlet / staff selectors in the shell  
-3. **Catalog** — create categories & products (cached into RxDB)  
+3. **Catalog** — create categories & products (cached into TinyBase)  
 4. **POS** — cart → complete **online** (`POST /v1/sales/complete`) or **via outbox**  
-5. **Receipts** — server list/detail + local RxDB sale docs  
+5. **Receipts** — server list/detail + local TinyBase sale rows  
 
-## Offline outbox (RxDB → Go)
+## Offline outbox (TinyBase → Go)
 
 Aligns with [outbox-sync.md](./docs/architecture/outbox-sync.md) and ADR 0001 (custom outbox — **not** PowerSync/Electric).
 
 ```
-User completes sale (Force outbox / offline)
+User completes sale (offline / API failure)
         │
         ▼
-RxDB: sales doc (synced=false) + outbox entry
+TinyBase: sales row (synced=false) + outbox row
   id = command_id (UUID, idempotency key)
   type = sale.complete
   payload = sale JSON
   status = pending
         │
         ▼
-Outbox worker (every ~2.5s + on online)
+Outbox worker (every ~1.5s + on online)
   POST /api/v1/commands
   Authorization + X-Business-Id + X-Outlet-Id + X-Device-Key
         │
@@ -181,17 +181,17 @@ Server stores each `command_id` in **`command_receipts`** and returns the same b
 **Demo offline-then-sync**
 
 1. Start API + web; login; add a product.  
-2. On POS, enable **Force outbox**, complete a sale → pending badge increases.  
-3. Click **Sync now** (or wait for the worker) → pending clears; sale appears under Receipts.  
+2. On POS, go offline (or break the API), complete a sale → pending badge increases.  
+3. Come online and wait for the worker → pending clears; sale appears under Receipts.  
 4. Repeat the same command id (worker / server) → `idempotent_replay: true`.
 
-Local collections (IndexedDB via Dexie storage): `outbox`, `products`, `sales`, `meta` (device key).
+Local tables (IndexedDB via TinyBase persister): `outbox`, `products`, `sales`, `meta` (device key + catalog snapshot).
 
 ## Architecture pointers
 
 - [Architecture overview](./docs/architecture/overview.md)  
 - [ADR 0001](./docs/architecture/adr/0001-offline-first-custom-outbox.md) — custom outbox  
-- [ADR 0002](./docs/architecture/adr/0002-rxdb-default-local-store.md) — RxDB default  
+- [ADR 0003](./docs/architecture/adr/0003-tinybase-default-local-store.md) — TinyBase default  
 - [ERD](./docs/erd.md) — multi-tenant model + WA owner login  
 
 ## License

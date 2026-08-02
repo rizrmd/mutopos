@@ -177,7 +177,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     void (async () => {
-      // Always leave the loading gate, even if RxDB or /me fails.
+      // Always leave the loading gate, even if TinyBase or /me fails.
       try {
         const key = await getOrCreateDeviceKey()
         setDeviceKey(key)

@@ -1,6 +1,6 @@
 # MutoPOS Web (`apps/web`)
 
-Vite + React + TypeScript + shadcn/ui + **RxDB** custom outbox client.
+Vite + React + TypeScript + shadcn/ui + **[TinyBase](https://tinybase.org/)** custom outbox client.
 
 ## Run
 
@@ -19,13 +19,13 @@ API must be running on `:8080` (or set `VITE_API_BASE` to a full API origin). De
 |--------|------|--------|
 | Login | `/login` | WA OTP stub |
 | POS | `/` | Online sale + outbox sale |
-| Catalog | `/catalog` | Product/category CRUD; caches to RxDB |
-| Receipts | `/receipts` | Server list + local RxDB sales |
+| Catalog | `/catalog` | Product/category CRUD; caches to TinyBase |
+| Receipts | `/receipts` | Server list + local TinyBase sales |
 
 ## Offline / outbox
 
-See root [README — Offline outbox](../../README.md#offline-outbox-rxdb--go).
+See root [README — Offline outbox](../../README.md#offline-outbox-tinybase--go).
 
-- `src/lib/db.ts` — RxDB (Dexie storage): `outbox`, `products`, `sales`, `meta`
+- `src/lib/db.ts` — TinyBase + IndexedDB persister: tables `outbox`, `products`, `sales`, `meta`
 - `src/lib/outbox.ts` — worker pushes `POST /v1/commands`
-- POS **Force outbox** / offline → local write then sync
+- POS offline / API failure → local write then background sync

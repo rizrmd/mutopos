@@ -1,5 +1,14 @@
 import { api, type TenantHeaders } from '@/lib/api'
-import { getDb, type OutboxDoc } from '@/lib/db'
+import {
+  findLocalSaleByClientId,
+  listOutboxDocs,
+  listPendingOutbox,
+  patchLocalSale,
+  patchOutbox,
+  subscribeTable,
+  TABLES,
+  type OutboxDoc,
+} from '@/lib/db'
 
 export type OutboxStats = {
   pending: number
@@ -17,11 +26,20 @@ let running = false
 let lastError: string | undefined
 let lastSyncAt: number | undefined
 const listeners = new Set<Listener>()
+let tableUnsub: (() => void) | null = null
 
 export function subscribeOutbox(fn: Listener): () => void {
   listeners.add(fn)
   void emitStats()
-  return () => listeners.delete(fn)
+  // Reactivity: re-emit when outbox table changes (TinyBase listener).
+  if (!tableUnsub) {
+    tableUnsub = subscribeTable(TABLES.outbox, () => {
+      void emitStats()
+    })
+  }
+  return () => {
+    listeners.delete(fn)
+  }
 }
 
 async function emitStats() {
@@ -31,8 +49,7 @@ async function emitStats() {
 
 export async function getOutboxStats(): Promise<OutboxStats> {
   try {
-    const db = await getDb()
-    const all = await db.outbox.find().exec()
+    const all = await listOutboxDocs()
     const pending = all.filter((d) => d.status === 'pending').length
     const failed = all.filter((d) => d.status === 'failed').length
     const inFlight = all.filter((d) => d.status === 'in_flight').length
@@ -95,22 +112,12 @@ export async function flushOutbox(
 
   running = true
   try {
-    const db = await getDb()
-    const pending = await db.outbox
-      .find({
-        selector: {
-          status: { $in: ['pending', 'failed'] },
-          businessId: tenant.businessId,
-        },
-        sort: [{ createdAt: 'asc' }],
-      })
-      .exec()
+    const pending = await listPendingOutbox(tenant.businessId)
 
-    for (const doc of pending) {
-      const data = doc.toJSON() as OutboxDoc
+    for (const data of pending) {
       if (data.attempts >= 8 && data.status === 'failed') continue
 
-      await doc.patch({
+      await patchOutbox(data.id, {
         status: 'in_flight',
         attempts: data.attempts + 1,
       })
@@ -125,7 +132,7 @@ export async function flushOutbox(
           payload,
         })
         if (res.status === 'applied' || res.idempotent_replay) {
-          await doc.patch({
+          await patchOutbox(data.id, {
             status: 'sent',
             lastError: '',
             resultJson: JSON.stringify(res.result ?? res),
@@ -134,15 +141,13 @@ export async function flushOutbox(
           if (data.type === 'sale.complete' && payload && typeof payload === 'object') {
             const p = payload as { client_sale_id?: string }
             if (p.client_sale_id) {
-              const sale = await db.sales
-                .findOne({ selector: { clientSaleId: p.client_sale_id } })
-                .exec()
+              const sale = await findLocalSaleByClientId(p.client_sale_id)
               if (sale) {
                 const result = (res.result ?? {}) as {
                   id?: string
                   receipt_no?: string
                 }
-                await sale.patch({
+                await patchLocalSale(sale.id, {
                   synced: true,
                   status: 'completed',
                   serverId: result.id,
@@ -154,13 +159,13 @@ export async function flushOutbox(
           lastSyncAt = Date.now()
           lastError = undefined
         } else if (res.status === 'rejected') {
-          await doc.patch({
+          await patchOutbox(data.id, {
             status: 'failed',
             lastError: res.message ?? res.error ?? 'rejected',
           })
           lastError = res.message ?? res.error
         } else {
-          await doc.patch({
+          await patchOutbox(data.id, {
             status: 'pending',
             lastError: 'unexpected status',
           })
@@ -172,7 +177,7 @@ export async function flushOutbox(
             ? Number((e as { status: number }).status)
             : 0
         // 4xx permanent domain errors → failed; network/5xx → pending retry
-        await doc.patch({
+        await patchOutbox(data.id, {
           status: status >= 400 && status < 500 ? 'failed' : 'pending',
           lastError: msg,
         })
@@ -185,3 +190,5 @@ export async function flushOutbox(
     await emitStats()
   }
 }
+
+export type { OutboxDoc }

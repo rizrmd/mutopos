@@ -18,7 +18,14 @@ import {
   type Category,
   type Product,
 } from '@/lib/api'
-import { cacheCatalog, enqueueOutbox, getDb, getLocalCatalog } from '@/lib/db'
+import {
+  cacheCatalog,
+  enqueueOutbox,
+  getLocalCatalog,
+  insertLocalSale,
+  listLocalSales,
+  patchLocalSale,
+} from '@/lib/db'
 import { flushOutbox } from '@/lib/outbox'
 import { useSession } from '@/lib/session'
 import { cn } from '@/lib/utils'
@@ -107,12 +114,9 @@ export function POSPage() {
 
   const loadTickets = useCallback(async () => {
     if (!businessId) return
-    const db = await getDb()
-    const local = await db.sales
-      .find({ selector: { businessId }, sort: [{ createdAt: 'desc' }] })
-      .exec()
+    const local = await listLocalSales(businessId, { limit: 12 })
     setTickets(
-      local.slice(0, 12).map((d, i) => {
+      local.map((d, i) => {
         let lineCount = 0
         try {
           lineCount = (JSON.parse(d.linesJson) as unknown[]).length
@@ -396,8 +400,7 @@ export function POSPage() {
     }
 
     try {
-      const db = await getDb()
-      await db.sales.insert({
+      await insertLocalSale({
         id: clientSaleId,
         businessId,
         outletId,
@@ -415,14 +418,11 @@ export function POSPage() {
       if (online) {
         try {
           const sale = await api.completeSaleOnline(tenant, payload)
-          const local = await db.sales.findOne(clientSaleId).exec()
-          if (local) {
-            await local.patch({
-              synced: true,
-              serverId: sale.id,
-              receiptNo: sale.receipt_no ?? undefined,
-            })
-          }
+          await patchLocalSale(clientSaleId, {
+            synced: true,
+            serverId: sale.id,
+            receiptNo: sale.receipt_no ?? undefined,
+          })
           receiptLabel = sale.receipt_no ?? sale.id.slice(0, 8)
           setMessage(
             `Sale complete · ${receiptLabel} · ${money(sale.total_minor)}`,
