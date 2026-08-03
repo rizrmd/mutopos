@@ -1,0 +1,298 @@
+/* Square-style team passcode clock-in (dark full-screen gate). */
+
+.mp-lock {
+  position: fixed;
+  left: 0;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  background-color: var(--lock-bg);
+}
+
+.mp-lock__bar {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  height: 56px;
+  flex-shrink: 0;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--lock-line);
+}
+
+.mp-lock__brand {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+}
+
+.mp-lock__brand-text {
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: 0.3px;
+  color: var(--lock-dim);
+}
+
+.mp-lock__close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+}
+
+.mp-lock__body {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+}
+
+.mp-lock__inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 24px;
+}
+
+.mp-lock__h1 {
+  font-size: 24px;
+  font-weight: 600;
+  letter-spacing: -0.3px;
+  text-align: center;
+  color: var(--lock-fg);
+  margin-bottom: 8px;
+}
+
+.mp-lock__hint {
+  font-size: 14px;
+  text-align: center;
+  color: var(--lock-dim);
+  margin-bottom: 32px;
+}
+
+.mp-lock__grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  width: 100%;
+  max-width: 680px;
+}
+
+.mp-lock__tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 20px;
+  background-color: var(--lock-tile);
+  border: 1px solid var(--lock-line);
+}
+
+.mp-lock__tile-avatar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 64px;
+  height: 64px;
+}
+
+.mp-lock__tile-initials {
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.mp-lock__tile-name {
+  font-size: 14px;
+  font-weight: 600;
+  text-align: center;
+  color: var(--lock-fg);
+}
+
+.mp-lock__tile-role {
+  font-size: 11px;
+  letter-spacing: 1px;
+  text-align: center;
+  color: var(--lock-faint);
+}
+
+.mp-lock__empty {
+  margin-top: 24px;
+  font-size: 14px;
+  color: var(--lock-dim);
+}
+
+/* ---------- PIN step ---------- */
+
+.mp-pin {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  max-width: 340px;
+}
+
+.mp-pin__back {
+  margin-bottom: 24px;
+  font-size: 14px;
+  color: var(--lock-dim);
+}
+
+.mp-pin__avatar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 80px;
+  height: 80px;
+  margin-bottom: 12px;
+}
+
+.mp-pin__initials {
+  font-size: 24px;
+  font-weight: 700;
+}
+
+.mp-pin__name {
+  font-size: 18px;
+  font-weight: 600;
+  text-align: center;
+  color: var(--lock-fg);
+  margin-bottom: 4px;
+}
+
+.mp-pin__prompt {
+  font-size: 14px;
+  color: var(--lock-dim);
+  margin-bottom: 32px;
+}
+
+.mp-pin__dots {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+/*
+ * The old error state used a Tailwind arbitrary `animate-[shake]`; here it is
+ * a plain keyframe animation, which Lynx supports natively.
+ */
+.mp-pin__dots.is-shaking {
+  animation: mp-shake 0.35s ease-in-out;
+}
+
+@keyframes mp-shake {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  20% {
+    transform: translateX(-6px);
+  }
+  40% {
+    transform: translateX(6px);
+  }
+  60% {
+    transform: translateX(-4px);
+  }
+  80% {
+    transform: translateX(4px);
+  }
+}
+
+.mp-pin__dot {
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--lock-faint);
+}
+
+.mp-pin__dot.is-filled {
+  border-color: var(--lock-fg);
+  background-color: var(--lock-fg);
+}
+
+.mp-pin__status {
+  min-height: 20px;
+  margin-bottom: 24px;
+  font-size: 14px;
+  text-align: center;
+  color: var(--lock-error);
+}
+
+.mp-pad {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  width: 100%;
+}
+
+.mp-pad__key {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 64px;
+  background-color: var(--lock-tile);
+}
+
+.mp-pad__key.is-disabled {
+  opacity: 0.4;
+}
+
+.mp-pad__key-text {
+  font-size: 24px;
+  font-weight: 500;
+  color: var(--lock-fg);
+}
+
+.mp-pad__spacer {
+  height: 64px;
+}
+
+.mp-pin__footnote {
+  margin-top: 32px;
+  font-size: 11px;
+  text-align: center;
+  color: var(--lock-faint);
+}
+
+/* Dark-surface avatar tints (stronger than the header chips). */
+.mp-ltint-0 {
+  background-color: #bfdbfe;
+}
+.mp-ltint-0-text {
+  color: #1e3a8a;
+}
+.mp-ltint-1 {
+  background-color: #ddd6fe;
+}
+.mp-ltint-1-text {
+  color: #4c1d95;
+}
+.mp-ltint-2 {
+  background-color: #fde68a;
+}
+.mp-ltint-2-text {
+  color: #451a03;
+}
+.mp-ltint-3 {
+  background-color: #fecdd3;
+}
+.mp-ltint-3-text {
+  color: #881337;
+}
+.mp-ltint-4 {
+  background-color: #a7f3d0;
+}
+.mp-ltint-4-text {
+  color: #064e3b;
+}
+.mp-ltint-5 {
+  background-color: #fed7aa;
+}
+.mp-ltint-5-text {
+  color: #431407;
+}

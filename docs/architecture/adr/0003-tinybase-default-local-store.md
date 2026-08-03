@@ -3,7 +3,8 @@
 - **Status:** Accepted  
 - **Date:** 2026-08-02  
 - **Deciders:** MutoPOS task migration (local-first → [TinyBase](https://tinybase.org/))  
-- **Supersedes:** [ADR 0002](./0002-rxdb-default-local-store.md) (RxDB default)
+- **Supersedes:** [ADR 0002](./0002-rxdb-default-local-store.md) (RxDB default)  
+- **Amended by:** [ADR 0004](./0004-lynxjs-client.md) — the client moved to LynxJS, so persistence is a custom persister over host storage instead of `createIndexedDbPersister`. TinyBase, the tables and the repository API are unchanged.
 
 ## Context
 
@@ -21,7 +22,7 @@ We want a lighter, explicit reactive store that:
 ## Decision
 
 1. **TinyBase is the default** client local store for MutoPOS.
-2. Persistence: **`createIndexedDbPersister`** (`tinybase/persisters/persister-indexed-db`) with auto-save; in-memory fallback if IDB fails.
+2. Persistence: auto-saving persister with an in-memory fallback. *(Originally `createIndexedDbPersister`; now a custom persister over Lynx host storage — see [ADR 0004](./0004-lynxjs-client.md).)*
 3. Tables: `outbox`, `products`, `sales`, `meta` (same logical collections as before).
 4. All feature code uses **repository helpers** in `apps/web/src/lib/db.ts` (and outbox worker in `outbox.ts`); pages do not import TinyBase APIs directly.
 5. Sync remains **custom outbox → Go** only; TinyBase is storage + reactivity, not the conflict engine.

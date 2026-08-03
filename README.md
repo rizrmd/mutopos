@@ -4,7 +4,7 @@ Offline-first multi-tenant POS (point of sale).
 
 | Layer | Stack | Role |
 |-------|--------|------|
-| **Client** | Vite + React + shadcn/ui + **TinyBase** (`apps/web`) | POS UI, local store, **custom outbox** |
+| **Client** | **LynxJS (ReactLynx)** + Rspeedy + **TinyBase** (`apps/web`) | Cross-platform POS UI, local store, **custom outbox** |
 | **API** | Go + PostgreSQL (`apps/api`) | Auth, domain rules, authoritative writes, `command_receipts` |
 | **Docs** | [`docs/`](./docs/) | Architecture (offline/outbox) + SaaS ERD |
 
@@ -16,7 +16,7 @@ Offline-first multi-tenant POS (point of sale).
 mutopos/
   apps/
     api/          Go HTTP API + SQL migrations (ERD)
-    web/          Vite React TypeScript + shadcn + TinyBase outbox
+    web/          LynxJS ReactLynx TypeScript + TinyBase outbox
   docs/
     architecture/ Offline-first + custom outbox ADRs
     erd.md        Multi-tenant Business, WA login, catalog, transaksi
@@ -28,7 +28,7 @@ mutopos/
 | Tool | Notes |
 |------|--------|
 | **Go** 1.22+ | API (`apps/api`) |
-| **Node.js** 20+ / npm | Web (`apps/web`) |
+| **Node.js** 20.19+ / npm | Client (`apps/web`); Rspeedy needs `^20.19.0 \|\| >=22.12.0` |
 | **PostgreSQL** 14+ | Any local or hosted instance — **no Docker required** |
 
 Create a database (examples):
@@ -56,7 +56,7 @@ cp apps/api/.env.example apps/api/.env
 | `AUTO_MIGRATE` | `true` | Run SQL migrations on API start |
 | `SESSION_SECRET` | dev default | Salts session / OTP hashes |
 | `OTP_STUB_CODE` | `000000` | Fixed WhatsApp OTP for the stub (empty = still uses stub, logs code) |
-| `VITE_API_BASE` | `/api` | Web → API base (dev proxy rewrites `/api` → `:8080`) |
+| `MUTOPOS_API_BASE` | `http://127.0.0.1:8080` | Absolute API origin baked into the Lynx bundle (must be reachable from the device) |
 
 Sample:
 
@@ -124,33 +124,37 @@ cd apps/api && go test ./...
 
 Schema: [`apps/api/migrations/001_init.sql`](./apps/api/migrations/001_init.sql) ↔ [`docs/erd.md`](./docs/erd.md).
 
-## Run: Web
+## Run: Client (LynxJS)
 
 ```bash
 cd apps/web
 npm install
-npm run dev
+MUTOPOS_API_BASE=http://127.0.0.1:8080 npm run dev
 ```
 
-Open http://127.0.0.1:5173
+Rspeedy prints a QR code — scan it with **LynxExplorer** (iOS/Android) to load
+the bundle. On a physical device use your machine's LAN address, e.g.
+`MUTOPOS_API_BASE=http://192.168.1.10:8080`: a Lynx bundle has no page origin,
+so the old `/api` dev proxy is not available and the API base must be absolute.
 
 Production build:
 
 ```bash
 cd apps/web
-npm run build
+npm run build      # dist/main.lynx.bundle
 npm run preview
 ```
 
-Dev proxy: `/api/*` → `http://127.0.0.1:8080/*` (`apps/web/vite.config.ts`).
+`@lynx-js/tasm` ships glibc-only native prebuilds, so the build needs a glibc
+Linux or macOS toolchain (it will not run on Alpine/musl).
 
-### Web flows
+### Client flows
 
 1. **Owner login** — phone E.164 + OTP stub (device / manager session)  
 2. **Staff clock-in** — Square-style passcode screen (team grid + 4-digit PIN pad). Free staff switching is disabled; use **Lock** to clock out.  
 3. **Catalog** — create categories & products (cached into TinyBase)  
-4. **POS** — cart → complete **online** (`POST /v1/sales/complete`) or **via outbox**  
-5. **Receipts** — server list/detail + local TinyBase sale rows  
+4. **Checkout** — cart → tender sheet → complete **online** (`POST /v1/sales/complete`) or **via outbox**  
+5. **Transactions** — server list/detail + local TinyBase sale rows  
 
 **Demo floor cashiers** (from `POST /v1/demo/seed`): Jessica / Ryan / Anna — default passcode **`1234`**. Owner can set or change PINs via `POST /v1/staff/{id}/pin`.
 
@@ -169,7 +173,7 @@ TinyBase: sales row (synced=false) + outbox row
   status = pending
         │
         ▼
-Outbox worker (every ~1.5s + on online)
+Outbox worker (every ~1.5s + when the API becomes reachable)
   POST /api/v1/commands
   Authorization + X-Business-Id + X-Outlet-Id + X-Device-Key
         │
@@ -182,18 +186,19 @@ Server stores each `command_id` in **`command_receipts`** and returns the same b
 
 **Demo offline-then-sync**
 
-1. Start API + web; login; add a product.  
-2. On POS, go offline (or break the API), complete a sale → pending badge increases.  
-3. Come online and wait for the worker → pending clears; sale appears under Receipts.  
+1. Start API + client; login; add a product.  
+2. On Checkout, go offline (or stop the API), complete a sale → pending badge increases.  
+3. Come online and wait for the worker → pending clears; sale appears under Transactions.  
 4. Repeat the same command id (worker / server) → `idempotent_replay: true`.
 
-Local tables (IndexedDB via TinyBase persister): `outbox`, `products`, `sales`, `meta` (device key + catalog snapshot).
+Local tables (TinyBase, persisted through the Lynx host key/value store — see `apps/web/src/lib/storage.ts`): `outbox`, `products`, `sales`, `meta` (device key + catalog snapshot).
 
 ## Architecture pointers
 
 - [Architecture overview](./docs/architecture/overview.md)  
 - [ADR 0001](./docs/architecture/adr/0001-offline-first-custom-outbox.md) — custom outbox  
 - [ADR 0003](./docs/architecture/adr/0003-tinybase-default-local-store.md) — TinyBase default  
+- [ADR 0004](./docs/architecture/adr/0004-lynxjs-client.md) — LynxJS client runtime  
 - [ERD](./docs/erd.md) — multi-tenant model + WA owner login  
 
 ## License

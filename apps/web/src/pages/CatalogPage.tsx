@@ -1,30 +1,16 @@
-import { useCallback, useEffect, useState } from 'react'
-import { Plus } from 'lucide-react'
+import { useCallback, useEffect, useState } from '@lynx-js/react'
 
-import { Button } from '@/components/ui/button'
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
-import { api, formatMoney, type Category, type Product } from '@/lib/api'
+import { Button } from '@/components/ui/Button'
+import { Card, CardContent, CardHeader } from '@/components/ui/Card'
+import { Icon } from '@/components/ui/Icon'
+import { TextField } from '@/components/ui/TextField'
+import { api, type Category, type Product } from '@/lib/api'
 import { cacheCatalog, getLocalCatalog } from '@/lib/db'
+import { formatMoney } from '@/lib/format'
 import { useSession } from '@/lib/session'
 import { cn } from '@/lib/utils'
 
-const TILES = [
-  'bg-[var(--pastel-6)]',
-  'bg-[var(--pastel-1)]',
-  'bg-[var(--pastel-9)]',
-  'bg-[var(--pastel-7)]',
-  'bg-[var(--pastel-3)]',
-  'bg-[var(--pastel-8)]',
-  'bg-[var(--pastel-5)]',
-  'bg-[var(--pastel-2)]',
-]
+const TILE_COUNT = 8
 
 export function CatalogPage() {
   const { tenant, businessId, memberships } = useSession()
@@ -41,6 +27,7 @@ export function CatalogPage() {
   const [busy, setBusy] = useState(false)
 
   const load = useCallback(async () => {
+    'background only'
     let hadLocal = false
     // Offline-first: show cached catalog before network.
     if (businessId) {
@@ -81,6 +68,7 @@ export function CatalogPage() {
   }, [load])
 
   async function addProduct() {
+    'background only'
     if (!tenant || !name) return
     setBusy(true)
     setError(null)
@@ -102,6 +90,7 @@ export function CatalogPage() {
   }
 
   async function addCategory() {
+    'background only'
     if (!tenant || !catName) return
     setBusy(true)
     try {
@@ -116,140 +105,130 @@ export function CatalogPage() {
   }
 
   return (
-    <div className="mx-auto max-w-5xl space-y-5">
-      <div>
-        <h1 className="text-xl font-bold tracking-tight">Items</h1>
-        <p className="text-sm text-muted-foreground">
+    <view className="mp-page">
+      <view>
+        <text className="mp-title">Items</text>
+        <text className="mp-subtitle">
           Products and categories available at checkout.
-        </p>
-      </div>
+        </text>
+      </view>
 
       {categories.length > 0 ? (
-        <div className="flex flex-wrap gap-2">
+        <view className="mp-chipwrap">
           {categories.map((c, i) => (
-            <span
+            <view
               key={c.id}
-              className={cn(
-                'rounded-none px-3 py-2 text-sm font-semibold text-foreground/90',
-                TILES[i % TILES.length],
-              )}
+              className={cn('mp-tag', `mp-pastel-${i % TILE_COUNT}`)}
             >
-              {c.name}
-            </span>
+              <text className="mp-tag__text">{c.name}</text>
+            </view>
           ))}
-        </div>
+        </view>
       ) : null}
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      <view className="mp-grid2">
         <Card>
-          <CardHeader className="p-4 pb-2">
-            <CardTitle className="text-base">Add product</CardTitle>
-            <CardDescription>
-              Price in {currency === 'USD' ? 'cents (e.g. 1295 = $12.95)' : 'minor units'}.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3 p-4 pt-2">
-            <Input
+          <CardHeader
+            title="Add product"
+            description={`Price in ${
+              currency === 'USD' ? 'cents (e.g. 1295 = $12.95)' : 'minor units'
+            }.`}
+          />
+          <CardContent>
+            <TextField
               placeholder="Name"
               value={name}
-              onChange={(e) => setName(e.target.value)}
+              onChangeText={setName}
             />
-            <Input
+            <TextField
               placeholder="SKU (optional)"
               value={sku}
-              onChange={(e) => setSku(e.target.value)}
+              onChangeText={setSku}
             />
-            <Input
-              placeholder="Price (IDR)"
+            <TextField
+              placeholder="Price"
               type="number"
               value={price}
-              onChange={(e) => setPrice(e.target.value)}
+              onChangeText={setPrice}
             />
             <Button
-              type="button"
+              label="Create product"
               disabled={busy || !name}
-              onClick={() => void addProduct()}
+              onTap={() => void addProduct()}
             >
-              <Plus className="size-4" />
-              Create product
+              <Icon name="plus" size={16} color="#fcfcfd" />
             </Button>
           </CardContent>
         </Card>
 
         <Card>
-          <CardHeader className="p-4 pb-2">
-            <CardTitle className="text-base">Add category</CardTitle>
-            <CardDescription>
-              Shown as filters on the checkout library.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3 p-4 pt-2">
-            <Input
+          <CardHeader
+            title="Add category"
+            description="Shown as filters on the checkout library."
+          />
+          <CardContent>
+            <TextField
               placeholder="Category name"
               value={catName}
-              onChange={(e) => setCatName(e.target.value)}
+              onChangeText={setCatName}
             />
             <Button
-              type="button"
+              label="Create category"
               disabled={busy || !catName}
-              onClick={() => void addCategory()}
+              onTap={() => void addCategory()}
             >
-              <Plus className="size-4" />
-              Create category
+              <Icon name="plus" size={16} color="#fcfcfd" />
             </Button>
-            <ul className="space-y-1 text-sm text-muted-foreground">
+            <view className="mp-list">
               {categories.map((c) => (
-                <li key={c.id}>· {c.name}</li>
+                <text key={c.id} className="mp-bullet">
+                  · {c.name}
+                </text>
               ))}
-              {categories.length === 0 ? <li>No categories yet</li> : null}
-            </ul>
+              {categories.length === 0 ? (
+                <text className="mp-bullet">No categories yet</text>
+              ) : null}
+            </view>
           </CardContent>
         </Card>
-      </div>
+      </view>
 
-      {error ? (
-        <p className="text-sm font-medium text-destructive">{error}</p>
-      ) : null}
+      {error ? <text className="mp-error-text">{error}</text> : null}
 
       <Card>
-        <CardHeader className="p-4 pb-2">
-          <CardTitle className="text-base">
-            Products ({products.length})
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="p-4 pt-2">
-          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-            {products.map((p) => (
-              <div
-                key={p.id}
-                className="border border-border bg-card p-3"
-              >
-                <div className="font-semibold">{p.name}</div>
-                <div className="mt-0.5 text-sm text-foreground/70">
-                  {formatMoney(p.price_minor ?? 0, currency)}
-                </div>
-                <div className="mt-2 flex items-center justify-between text-[11px] font-medium">
-                  <span className="text-muted-foreground">
-                    {p.sku ?? 'No SKU'}
-                  </span>
-                  <span
-                    className={
-                      p.is_active ? 'text-emerald-800' : 'text-amber-800'
-                    }
-                  >
-                    {p.is_active ? 'Active' : 'Inactive'}
-                  </span>
-                </div>
-              </div>
-            ))}
-            {products.length === 0 ? (
-              <p className="col-span-full py-8 text-center text-sm text-muted-foreground">
-                No products — add one to start selling.
-              </p>
-            ) : null}
-          </div>
+        <CardHeader title={`Products (${products.length})`} />
+        <CardContent>
+          {products.length > 0 ? (
+            <view className="mp-grid3">
+              {products.map((p) => (
+                <view key={p.id} className="mp-product">
+                  <text className="mp-product__name">{p.name}</text>
+                  <text className="mp-product__price mp-num">
+                    {formatMoney(p.price_minor ?? 0, currency)}
+                  </text>
+                  <view className="mp-product__meta">
+                    <text className="mp-product__sku mp-truncate">
+                      {p.sku ?? 'No SKU'}
+                    </text>
+                    <text
+                      className={cn(
+                        'mp-product__state',
+                        !p.is_active && 'is-inactive',
+                      )}
+                    >
+                      {p.is_active ? 'Active' : 'Inactive'}
+                    </text>
+                  </view>
+                </view>
+              ))}
+            </view>
+          ) : (
+            <text className="mp-list__empty">
+              No products — add one to start selling.
+            </text>
+          )}
         </CardContent>
       </Card>
-    </div>
+    </view>
   )
 }

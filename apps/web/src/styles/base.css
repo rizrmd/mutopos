@@ -1,0 +1,316 @@
+/*
+ * Shared primitives.
+ *
+ * Lynx notes that shape this file:
+ *  - `overflow: scroll` does not exist; scrolling is `<scroll-view>`.
+ *  - `text-transform` is not a supported property, so anything that used
+ *    Tailwind's `uppercase` is uppercased in TSX instead.
+ *  - `:hover` / `:focus-visible` do not fire on native hosts; pressed and
+ *    selected states are expressed through explicit `is-*` classes.
+ */
+
+page {
+  background-color: var(--background);
+  color: var(--foreground);
+  font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+}
+
+.mp-app {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  background-color: var(--background);
+  color: var(--foreground);
+}
+
+/* ---------- layout helpers ---------- */
+
+.mp-row {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+}
+
+.mp-col {
+  display: flex;
+  flex-direction: column;
+}
+
+.mp-fill {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+
+.mp-center {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.mp-spread {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+}
+
+/* ---------- typography ---------- */
+
+.mp-title {
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.2px;
+  color: var(--foreground);
+}
+
+.mp-subtitle {
+  font-size: 13px;
+  color: var(--muted-foreground);
+}
+
+.mp-label {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.6px;
+  color: var(--muted-foreground);
+}
+
+.mp-num {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum';
+}
+
+.mp-truncate {
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  overflow: hidden;
+}
+
+.mp-error-text {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--destructive);
+}
+
+.mp-ok-text {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--primary);
+}
+
+/* ---------- boot / loading ---------- */
+
+.mp-boot {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  background-color: var(--background);
+}
+
+.mp-boot__mark {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  background-color: var(--primary);
+  margin-bottom: 8px;
+}
+
+.mp-boot__mark-text {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--primary-foreground);
+}
+
+.mp-boot__text {
+  font-size: 13px;
+  color: var(--muted-foreground);
+}
+
+/* ---------- button ---------- */
+
+.mp-btn {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 36px;
+  padding-left: 16px;
+  padding-right: 16px;
+  background-color: var(--primary);
+  border: 1px solid var(--primary);
+}
+
+.mp-btn__label {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--primary-foreground);
+}
+
+.mp-btn--outline {
+  background-color: var(--card);
+  border-color: var(--border-strong);
+}
+
+.mp-btn--outline .mp-btn__label {
+  color: var(--foreground);
+}
+
+.mp-btn--ghost {
+  background-color: transparent;
+  border-color: transparent;
+}
+
+.mp-btn--ghost .mp-btn__label {
+  color: var(--muted-foreground);
+}
+
+.mp-btn--sm {
+  height: 32px;
+  padding-left: 12px;
+  padding-right: 12px;
+}
+
+.mp-btn--sm .mp-btn__label {
+  font-size: 12px;
+}
+
+.mp-btn--lg {
+  height: 48px;
+}
+
+.mp-btn--lg .mp-btn__label {
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.mp-btn--icon {
+  width: 36px;
+  height: 36px;
+  padding-left: 0;
+  padding-right: 0;
+}
+
+.mp-btn--block {
+  width: 100%;
+}
+
+.mp-btn.is-disabled {
+  opacity: 0.45;
+}
+
+/* ---------- badge ---------- */
+
+.mp-badge {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border: 1px solid transparent;
+  background-color: var(--primary);
+}
+
+.mp-badge__text {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--primary-foreground);
+}
+
+.mp-badge--secondary {
+  background-color: var(--secondary);
+  border-color: var(--border);
+}
+
+.mp-badge--secondary .mp-badge__text {
+  color: var(--secondary-foreground);
+}
+
+.mp-badge--success {
+  background-color: var(--success-bg);
+  border-color: var(--success-line);
+}
+
+.mp-badge--success .mp-badge__text {
+  color: var(--success-fg);
+}
+
+.mp-badge--warning {
+  background-color: var(--warning-bg);
+  border-color: var(--warning-line);
+}
+
+.mp-badge--warning .mp-badge__text {
+  color: var(--warning-fg);
+}
+
+/* ---------- card ---------- */
+
+.mp-card {
+  display: flex;
+  flex-direction: column;
+  background-color: var(--card);
+  border: 1px solid var(--border);
+}
+
+.mp-card__header {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 16px 16px 8px 16px;
+}
+
+.mp-card__title {
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.1px;
+  color: var(--card-foreground);
+}
+
+.mp-card__desc {
+  font-size: 13px;
+  color: var(--muted-foreground);
+}
+
+.mp-card__content {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 8px 16px 16px 16px;
+}
+
+/* ---------- text field ---------- */
+
+.mp-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.mp-field__label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--foreground);
+}
+
+.mp-input {
+  height: 40px;
+  padding-left: 12px;
+  padding-right: 12px;
+  font-size: 14px;
+  color: var(--foreground);
+  background-color: var(--card);
+  border: 1px solid var(--border-strong);
+}
+
+.mp-input.is-focused {
+  border-color: var(--primary);
+}

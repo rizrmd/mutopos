@@ -1,4 +1,10 @@
-const API_BASE = import.meta.env.VITE_API_BASE ?? '/api'
+import { markReachable, markUnreachable } from '@/lib/net'
+
+/**
+ * Absolute API origin, injected by `source.define` in lynx.config.ts.
+ * A Lynx bundle has no page origin, so relative `/api` paths cannot resolve.
+ */
+const API_BASE = __API_BASE__
 
 export type Membership = {
   business_id: string
@@ -108,7 +114,40 @@ export type TenantHeaders = {
   deviceKey?: string | null
 }
 
-async function parse<T>(res: Response): Promise<T> {
+type RequestOptions = {
+  method?: string
+  headers?: Record<string, string>
+  body?: string
+}
+
+/**
+ * Single entry point to Lynx's fetch.
+ *
+ * Two reasons this exists rather than calling `fetch` at each call site:
+ * connectivity has to be inferred here (see `lib/net`), and Lynx's fetch
+ * silently swallows unhandled rejections, so every failure must be caught and
+ * re-thrown as something typed.
+ */
+async function request<T>(path: string, options?: RequestOptions): Promise<T> {
+  'background only'
+  let res: Response
+  try {
+    res = await fetch(`${API_BASE}${path}`, {
+      method: options?.method ?? 'GET',
+      headers: options?.headers,
+      body: options?.body,
+    })
+  } catch (err) {
+    markUnreachable()
+    throw new ApiError(
+      0,
+      'network_error',
+      err instanceof Error ? err.message : 'Network unreachable',
+    )
+  }
+
+  markReachable()
+
   const text = await res.text()
   let data: unknown = null
   try {
@@ -121,13 +160,15 @@ async function parse<T>(res: Response): Promise<T> {
     throw new ApiError(
       res.status,
       obj.error ?? 'error',
-      obj.message ?? res.statusText,
+      obj.message ?? `HTTP ${res.status}`,
     )
   }
   return data as T
 }
 
-function tenantHeaders(t: TenantHeaders): HeadersInit {
+const JSON_HEADERS = { 'Content-Type': 'application/json' }
+
+function tenantHeaders(t: TenantHeaders): Record<string, string> {
   const h: Record<string, string> = {
     Authorization: `Bearer ${t.token}`,
     'X-Business-Id': t.businessId,
@@ -138,29 +179,49 @@ function tenantHeaders(t: TenantHeaders): HeadersInit {
   return h
 }
 
+function tenantJson(t: TenantHeaders): Record<string, string> {
+  return { ...tenantHeaders(t), ...JSON_HEADERS }
+}
+
 export const api = {
+  /**
+   * Cheap unauthenticated reachability probe.
+   *
+   * Nothing else re-checks the API once it goes away: without
+   * `navigator.onLine` the only connectivity signal is traffic, and an idle
+   * register with an empty outbox generates none. The outbox worker calls this
+   * so the Online/Offline badge recovers on its own.
+   */
+  async health(): Promise<boolean> {
+    'background only'
+    try {
+      await request<unknown>('/healthz')
+      return true
+    } catch (err) {
+      // A reachable server answering 4xx/5xx still counts as online; only a
+      // transport failure means offline, and `request` already recorded it.
+      return err instanceof ApiError && err.status > 0
+    }
+  },
+
   async requestOTP(phone_e164: string) {
-    const res = await fetch(`${API_BASE}/v1/auth/otp/request`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ phone_e164 }),
-    })
-    return parse<{
+    'background only'
+    return request<{
       challenge_id: string
       phone_e164: string
       dev_code?: string
       stub?: boolean
       expires_at: string
-    }>(res)
+    }>('/v1/auth/otp/request', {
+      method: 'POST',
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ phone_e164 }),
+    })
   },
 
   async verifyOTP(phone_e164: string, code: string, display_name?: string) {
-    const res = await fetch(`${API_BASE}/v1/auth/otp/verify`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ phone_e164, code, display_name }),
-    })
-    return parse<{
+    'background only'
+    return request<{
       access_token: string
       expires_at: string
       user: User
@@ -170,50 +231,55 @@ export const api = {
         staff_id: string
         name: string
       } | null
-    }>(res)
+    }>('/v1/auth/otp/verify', {
+      method: 'POST',
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ phone_e164, code, display_name }),
+    })
   },
 
   async me(token: string) {
-    const res = await fetch(`${API_BASE}/v1/me`, {
+    'background only'
+    return request<{ user: User; memberships: Membership[] }>('/v1/me', {
       headers: { Authorization: `Bearer ${token}` },
     })
-    return parse<{ user: User; memberships: Membership[] }>(res)
   },
 
   async logout(token: string) {
-    await fetch(`${API_BASE}/v1/auth/logout`, {
+    'background only'
+    await request<unknown>('/v1/auth/logout', {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}` },
     })
   },
 
   async listOutlets(t: TenantHeaders) {
-    const res = await fetch(`${API_BASE}/v1/outlets`, {
+    'background only'
+    return request<{ outlets: Outlet[] }>('/v1/outlets', {
       headers: tenantHeaders(t),
     })
-    return parse<{ outlets: Outlet[] }>(res)
   },
 
   async listStaff(t: TenantHeaders) {
-    const res = await fetch(`${API_BASE}/v1/staff`, {
+    'background only'
+    return request<{ staff: Staff[] }>('/v1/staff', {
       headers: tenantHeaders(t),
     })
-    return parse<{ staff: Staff[] }>(res)
   },
 
   /** Square-style team passcode clock-in. */
   async staffLogin(t: TenantHeaders, staff_id: string, pin: string) {
-    const res = await fetch(`${API_BASE}/v1/staff/login`, {
-      method: 'POST',
-      headers: { ...tenantHeaders(t), 'Content-Type': 'application/json' },
-      body: JSON.stringify({ staff_id, pin }),
-    })
-    return parse<{
+    'background only'
+    return request<{
       ok: boolean
       staff_id: string
       display_name: string
       role: string
-    }>(res)
+    }>('/v1/staff/login', {
+      method: 'POST',
+      headers: tenantJson(t),
+      body: JSON.stringify({ staff_id, pin }),
+    })
   },
 
   async setStaffPin(
@@ -222,38 +288,41 @@ export const api = {
     pin: string,
     current_pin?: string,
   ) {
-    const res = await fetch(`${API_BASE}/v1/staff/${staffId}/pin`, {
-      method: 'POST',
-      headers: { ...tenantHeaders(t), 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        pin,
-        ...(current_pin ? { current_pin } : {}),
-      }),
-    })
-    return parse<{ ok: boolean; id: string; has_pin: boolean }>(res)
+    'background only'
+    return request<{ ok: boolean; id: string; has_pin: boolean }>(
+      `/v1/staff/${staffId}/pin`,
+      {
+        method: 'POST',
+        headers: tenantJson(t),
+        body: JSON.stringify({
+          pin,
+          ...(current_pin ? { current_pin } : {}),
+        }),
+      },
+    )
   },
 
   async listCategories(t: TenantHeaders) {
-    const res = await fetch(`${API_BASE}/v1/categories`, {
+    'background only'
+    return request<{ categories: Category[] }>('/v1/categories', {
       headers: tenantHeaders(t),
     })
-    return parse<{ categories: Category[] }>(res)
   },
 
   async createCategory(t: TenantHeaders, name: string) {
-    const res = await fetch(`${API_BASE}/v1/categories`, {
+    'background only'
+    return request<{ id: string; name: string }>('/v1/categories', {
       method: 'POST',
-      headers: { ...tenantHeaders(t), 'Content-Type': 'application/json' },
+      headers: tenantJson(t),
       body: JSON.stringify({ name }),
     })
-    return parse<{ id: string; name: string }>(res)
   },
 
   async listProducts(t: TenantHeaders) {
-    const res = await fetch(`${API_BASE}/v1/products`, {
+    'background only'
+    return request<{ products: Product[] }>('/v1/products', {
       headers: tenantHeaders(t),
     })
-    return parse<{ products: Product[] }>(res)
   },
 
   async createProduct(
@@ -266,12 +335,15 @@ export const api = {
       unit?: string
     },
   ) {
-    const res = await fetch(`${API_BASE}/v1/products`, {
-      method: 'POST',
-      headers: { ...tenantHeaders(t), 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    })
-    return parse<{ id: string; name: string; price_minor?: number }>(res)
+    'background only'
+    return request<{ id: string; name: string; price_minor?: number }>(
+      '/v1/products',
+      {
+        method: 'POST',
+        headers: tenantJson(t),
+        body: JSON.stringify(body),
+      },
+    )
   },
 
   async patchProduct(
@@ -284,26 +356,24 @@ export const api = {
       sku: string
     }>,
   ) {
-    const res = await fetch(`${API_BASE}/v1/products/${id}`, {
+    'background only'
+    return request<{ id: string; ok: boolean }>(`/v1/products/${id}`, {
       method: 'PATCH',
-      headers: { ...tenantHeaders(t), 'Content-Type': 'application/json' },
+      headers: tenantJson(t),
       body: JSON.stringify(body),
     })
-    return parse<{ id: string; ok: boolean }>(res)
   },
 
   async listSales(t: TenantHeaders) {
-    const res = await fetch(`${API_BASE}/v1/sales`, {
+    'background only'
+    return request<{ sales: Sale[] }>('/v1/sales', {
       headers: tenantHeaders(t),
     })
-    return parse<{ sales: Sale[] }>(res)
   },
 
   async getSale(t: TenantHeaders, id: string) {
-    const res = await fetch(`${API_BASE}/v1/sales/${id}`, {
-      headers: tenantHeaders(t),
-    })
-    return parse<Sale>(res)
+    'background only'
+    return request<Sale>(`/v1/sales/${id}`, { headers: tenantHeaders(t) })
   },
 
   async completeSaleOnline(
@@ -320,24 +390,24 @@ export const api = {
       note?: string
     },
   ) {
-    const res = await fetch(`${API_BASE}/v1/sales/complete`, {
+    'background only'
+    return request<Sale>('/v1/sales/complete', {
       method: 'POST',
-      headers: { ...tenantHeaders(t), 'Content-Type': 'application/json' },
+      headers: tenantJson(t),
       body: JSON.stringify(body),
     })
-    return parse<Sale>(res)
   },
 
   async registerDevice(
     t: TenantHeaders,
     body: { device_key: string; label?: string; outlet_id?: string },
   ) {
-    const res = await fetch(`${API_BASE}/v1/devices`, {
+    'background only'
+    return request<{ id: string; device_key: string }>('/v1/devices', {
       method: 'POST',
-      headers: { ...tenantHeaders(t), 'Content-Type': 'application/json' },
+      headers: tenantJson(t),
       body: JSON.stringify(body),
     })
-    return parse<{ id: string; device_key: string }>(res)
   },
 
   async pushCommand(
@@ -349,55 +419,36 @@ export const api = {
       payload: unknown
     },
   ) {
-    const res = await fetch(`${API_BASE}/v1/commands`, {
-      method: 'POST',
-      headers: { ...tenantHeaders(t), 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    })
-    return parse<{
+    'background only'
+    return request<{
       command_id: string
       status: string
       result?: unknown
       idempotent_replay?: boolean
       error?: string
       message?: string
-    }>(res)
+    }>('/v1/commands', {
+      method: 'POST',
+      headers: tenantJson(t),
+      body: JSON.stringify(body),
+    })
   },
 
-  /** Fill Vita daytime demo catalog + floor staff when the tenant is empty. */
+  /** Fill the daytime demo catalog + floor staff when the tenant is empty. */
   async seedDemo(t: TenantHeaders) {
-    const res = await fetch(`${API_BASE}/v1/demo/seed`, {
-      method: 'POST',
-      headers: tenantHeaders(t),
-    })
-    return parse<{
+    'background only'
+    return request<{
       ok: boolean
       demo?: {
         catalog_seeded?: boolean
         staff_added?: number
         business?: string
       }
-    }>(res)
+    }>('/v1/demo/seed', {
+      method: 'POST',
+      headers: tenantHeaders(t),
+    })
   },
 }
 
-/** Format money. USD minor = cents; IDR minor = whole rupiah. */
-export function formatMoney(minor: number, currency = 'IDR'): string {
-  const code = (currency || 'IDR').toUpperCase()
-  if (code === 'USD') {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-    }).format(minor / 100)
-  }
-  return new Intl.NumberFormat('id-ID', {
-    style: 'currency',
-    currency: code,
-    maximumFractionDigits: 0,
-  }).format(minor)
-}
-
-/** @deprecated prefer formatMoney(minor, currency) */
-export function formatIDR(minor: number): string {
-  return formatMoney(minor, 'IDR')
-}
+export { formatIDR, formatMoney } from '@/lib/format'

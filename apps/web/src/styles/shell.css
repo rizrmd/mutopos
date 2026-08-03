@@ -1,0 +1,432 @@
+/* Square-style navigation rail + header. */
+
+.mp-shell {
+  display: flex;
+  flex-direction: row;
+  width: 100%;
+  height: 100%;
+  background-color: var(--background);
+}
+
+/* ---------- sidebar ---------- */
+
+.mp-side {
+  display: flex;
+  flex-direction: column;
+  width: 240px;
+  flex-shrink: 0;
+  background-color: var(--sidebar);
+  border-right: 1px solid var(--border);
+}
+
+.mp-side.is-collapsed {
+  width: 0;
+  border-right-width: 0;
+  overflow: hidden;
+}
+
+.mp-side__brandrow {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 16px 14px 12px 14px;
+}
+
+.mp-side__collapse {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  margin-top: 2px;
+}
+
+.mp-side__biz {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: -0.1px;
+  color: var(--foreground);
+}
+
+.mp-side__outlet {
+  font-size: 11px;
+  color: var(--muted-foreground);
+}
+
+.mp-side__scoperow {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 16px 8px 16px;
+}
+
+.mp-side__scope-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--foreground);
+}
+
+.mp-side__scope-sub {
+  font-size: 11px;
+  color: var(--muted-foreground);
+}
+
+.mp-side__scope-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--border);
+}
+
+.mp-scope {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0 8px 8px 8px;
+  padding: 10px;
+  background-color: var(--card);
+  border: 1px solid var(--border);
+}
+
+/*
+ * Lynx has no `<select>` element, so business/outlet pickers are lists of
+ * tappable rows instead of a native dropdown.
+ */
+.mp-scope__option {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  padding: 7px 9px;
+  border: 2px solid var(--border);
+  background-color: var(--card);
+}
+
+.mp-scope__option.is-active {
+  border-color: var(--primary);
+  background-color: var(--primary-soft);
+}
+
+.mp-scope__option-text {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--foreground);
+}
+
+.mp-scope__option.is-active .mp-scope__option-text {
+  font-weight: 700;
+  color: var(--primary);
+}
+
+.mp-scope__empty {
+  font-size: 11px;
+  color: var(--muted-foreground);
+}
+
+/*
+ * `<scroll-view>` always lays out linearly, so it ignores flex/gap on itself;
+ * spacing lives on the inner container.
+ */
+.mp-nav {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+}
+
+.mp-nav__list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 0 8px;
+}
+
+.mp-nav__item {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+  padding: 10px;
+  border: 2px solid transparent;
+  position: relative;
+}
+
+.mp-nav__item.is-active {
+  border-color: var(--primary-line);
+  background-color: var(--primary-soft);
+}
+
+.mp-nav__rail {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  background-color: var(--primary);
+  opacity: 0;
+}
+
+.mp-nav__item.is-active .mp-nav__rail {
+  opacity: 1;
+}
+
+.mp-nav__icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  background-color: var(--muted);
+}
+
+.mp-nav__item.is-active .mp-nav__icon {
+  background-color: var(--primary);
+}
+
+.mp-nav__label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--foreground);
+}
+
+.mp-nav__item.is-active .mp-nav__label {
+  font-weight: 700;
+}
+
+.mp-side__footer {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px;
+  border-top: 1px solid var(--border);
+}
+
+.mp-side__wordmark {
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: -0.2px;
+  color: var(--foreground);
+}
+
+.mp-side__wordmark-dim {
+  font-weight: 400;
+  color: var(--muted-foreground);
+}
+
+.mp-side__status {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+/* ---------- header ---------- */
+
+.mp-main {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
+
+.mp-header {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 12px;
+  height: 52px;
+  flex-shrink: 0;
+  padding: 0 16px;
+  background-color: var(--card);
+  border-bottom: 1px solid var(--border);
+}
+
+.mp-header__title {
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.2px;
+  color: var(--foreground);
+}
+
+.mp-header__sub {
+  font-size: 11px;
+  color: var(--muted-foreground);
+}
+
+.mp-header__team {
+  flex: 1;
+  min-width: 0;
+  height: 40px;
+}
+
+.mp-header__team-row {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  padding: 0 4px;
+}
+
+.mp-chip {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  padding: 4px 10px 4px 4px;
+  border: 2px solid transparent;
+}
+
+.mp-chip.is-active {
+  border-color: var(--primary-line);
+  background-color: var(--primary-soft);
+}
+
+.mp-chip__text {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--muted-foreground);
+}
+
+.mp-chip.is-active .mp-chip__text {
+  color: var(--foreground);
+  font-weight: 600;
+}
+
+.mp-avatar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+}
+
+.mp-avatar__text {
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.mp-header__right {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.mp-search {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  width: 200px;
+  height: 36px;
+  padding: 0 8px;
+  background-color: var(--muted);
+  border: 1px solid var(--border);
+}
+
+.mp-search__input {
+  flex: 1;
+  min-width: 0;
+  height: 34px;
+  font-size: 14px;
+  color: var(--foreground);
+}
+
+.mp-account {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 4px 4px 8px;
+}
+
+.mp-account__name {
+  font-size: 12px;
+  font-weight: 600;
+  text-align: right;
+  color: var(--foreground);
+}
+
+.mp-account__role {
+  font-size: 10px;
+  text-align: right;
+  color: var(--muted-foreground);
+}
+
+.mp-account__avatar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  background-color: var(--primary-soft);
+}
+
+.mp-account__avatar-text {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--primary);
+}
+
+.mp-content {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+}
+
+.mp-content__scroll {
+  width: 100%;
+  height: 100%;
+}
+
+.mp-content__pad {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 16px;
+}
+
+/* Avatar tints, ported from the Tailwind palette classes. */
+.mp-tint-0 {
+  background-color: #dbeafe;
+}
+.mp-tint-0-text {
+  color: #1e40af;
+}
+.mp-tint-1 {
+  background-color: #ede9fe;
+}
+.mp-tint-1-text {
+  color: #5b21b6;
+}
+.mp-tint-2 {
+  background-color: #fef3c7;
+}
+.mp-tint-2-text {
+  color: #78350f;
+}
+.mp-tint-3 {
+  background-color: #ffe4e6;
+}
+.mp-tint-3-text {
+  color: #9f1239;
+}
+.mp-tint-4 {
+  background-color: #d1fae5;
+}
+.mp-tint-4-text {
+  color: #065f46;
+}
+.mp-tint-5 {
+  background-color: #ffedd5;
+}
+.mp-tint-5-text {
+  color: #7c2d12;
+}

@@ -4,7 +4,7 @@
 
 | Choice | Value |
 |--------|--------|
-| **Default** | **[TinyBase](https://tinybase.org/)** (IndexedDB persister) |
+| **Default** | **[TinyBase](https://tinybase.org/)** (custom persister on Lynx host storage) |
 | **Previous default** | RxDB (see [ADR 0002](./adr/0002-rxdb-default-local-store.md), superseded) |
 | **Access pattern** | Thin **adapter / repository** — domain never imports TinyBase APIs |
 | **Sync** | Custom outbox → Go API → Postgres ([outbox-sync.md](./outbox-sync.md)); **not** PowerSync / ElectricSQL |
@@ -28,13 +28,13 @@ The UI must update instantly when that state changes (multiple observers: cart d
 
 - **Reactive tables** — listeners on `outbox` / `sales` / `products` without a separate event bus for every collection.  
 - **Tabular model** — sales drafts, catalog rows, outbox entries map to TinyBase tables and rows.  
-- **Persistence** — official IndexedDB persister (`createIndexedDbPersister`); optional localStorage / other backends later.  
+- **Persistence** — a custom persister (`createCustomPersister`) writing through the Lynx host key/value store; the browser IndexedDB persister is not available on Lynx. See [host storage](#host-storage-on-lynx).  
 - **Light surface** — no document-DB plugin stack; filtering stays in repository helpers at POS data volumes.
 
 ### Responsibilities of the TinyBase layer
 
 - Table layout and cell typing conventions  
-- Load + auto-save via IndexedDB persister  
+- Load + auto-save via the custom Lynx persister  
 - Listeners exposed **through** repositories (e.g. outbox stats subscription)  
 - Persistence of outbox rows and local sales  
 
@@ -45,6 +45,25 @@ The UI must update instantly when that state changes (multiple observers: cart d
 - Authorization and pricing rules that must be enforced server-side  
 
 Those belong in **Go + Postgres**.
+
+## Host storage on Lynx
+
+The client runs on [LynxJS](https://lynxjs.org/), which has no DOM: there is no
+`localStorage` and no IndexedDB, and durable key/value storage is a **host**
+capability rather than part of the Lynx API surface.
+
+`apps/web/src/lib/storage.ts` is the seam. It probes, in order:
+
+| Backend | Durability |
+|---------|------------|
+| `NativeModules.LocalStorageModule` | Persistent — survives app restarts |
+| `lynx.setSessionStorageItem` / `getSessionStorageItem` | Shared across LynxViews, lost when the host process dies |
+| In-memory `Map` | Session only — keeps the POS usable, warns on startup |
+
+The persister serialises the whole store to one JSON blob under
+`mutopos.tinybase.v1`. That is acceptable at POS data volumes (a cached catalog
+plus a short outbox) and keeps the storage contract to `get` / `set` / `remove`,
+so a host that exposes a real database can be swapped in behind the same seam.
 
 ## Thin adapter / repository layer
 
@@ -58,6 +77,9 @@ UI / domain use-cases
         │
         ▼
   apps/web/src/lib/db.ts  (only module that imports 'tinybase')
+        │
+        ▼
+  apps/web/src/lib/storage.ts  (only module that touches host storage)
 ```
 
 ### Rules
@@ -85,7 +107,8 @@ Exact cell shapes live in `apps/web/src/lib/db.ts`.
 
 ## Anti-patterns
 
-- Calling `store.getTable` / TinyBase listeners from React components without a repository  
+- Calling `store.getTable` / TinyBase listeners from components without a repository  
+- Reaching for `localStorage` / IndexedDB directly — neither exists on Lynx; go through `lib/storage.ts`  
 - Using PowerSync/Electric (or any vendor Postgres replication to client) as “the sync”  
 - Treating local stock numbers as final after multi-device activity without server reconcile  
 - Duplicating domain validation only on the client and skipping Go checks  
@@ -94,5 +117,6 @@ Exact cell shapes live in `apps/web/src/lib/db.ts`.
 
 - [SaaS ERD — server tables and client collection mapping](../erd.md)  
 - [ADR 0003 — TinyBase default](./adr/0003-tinybase-default-local-store.md)  
+- [ADR 0004 — LynxJS client runtime](./adr/0004-lynxjs-client.md)  
 - [Outbox & sync](./outbox-sync.md)  
 - [Overview](./overview.md)  

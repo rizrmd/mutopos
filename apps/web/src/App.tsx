@@ -1,5 +1,5 @@
-import type { ReactNode } from 'react'
-import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
+import type { ReactNode } from '@lynx-js/react'
+import { MemoryRouter, Navigate, Route, Routes } from 'react-router'
 
 import { AppShell } from '@/components/AppShell'
 import { SessionProvider, useSession } from '@/lib/session'
@@ -10,12 +10,12 @@ import { ReceiptDetailPage, ReceiptsPage } from '@/pages/ReceiptsPage'
 
 function BootScreen() {
   return (
-    <div className="flex min-h-svh flex-col items-center justify-center gap-2 bg-background text-muted-foreground">
-      <div className="flex size-10 items-center justify-center bg-primary text-sm font-semibold text-primary-foreground">
-        M
-      </div>
-      <span className="text-sm">Loading MutoPOS…</span>
-    </div>
+    <view className="mp-boot">
+      <view className="mp-boot__mark">
+        <text className="mp-boot__mark-text">M</text>
+      </view>
+      <text className="mp-boot__text">Loading MutoPOS…</text>
+    </view>
   )
 }
 
@@ -23,20 +23,26 @@ function RequireAuth({ children }: { children: ReactNode }) {
   const { ready, token } = useSession()
   if (!ready) return <BootScreen />
   if (!token) return <Navigate to="/login" replace />
-  return children
+  return <>{children}</>
 }
 
 function PublicOnly({ children }: { children: ReactNode }) {
   const { ready, token } = useSession()
   if (!ready) return <BootScreen />
   if (token) return <Navigate to="/" replace />
-  return children
+  return <>{children}</>
 }
 
-export default function App() {
+/**
+ * There is no browser history in Lynx, so routing runs on `MemoryRouter`
+ * (`BrowserRouter` needs `window.history`) from `react-router` — the DOM-free
+ * package. `<Link>` / `<NavLink>` do not exist either; navigation goes through
+ * `useNavigate` on a tappable `<view>`.
+ */
+export function App() {
   return (
     <SessionProvider>
-      <BrowserRouter>
+      <MemoryRouter>
         <Routes>
           <Route
             path="/login"
@@ -60,7 +66,7 @@ export default function App() {
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
-      </BrowserRouter>
+      </MemoryRouter>
     </SessionProvider>
   )
 }

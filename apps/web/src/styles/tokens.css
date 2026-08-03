@@ -1,0 +1,65 @@
+/*
+ * MutoPOS design tokens — Square-inspired retail POS.
+ *
+ * These were `oklch()` under Tailwind v4. Lynx parses colours through the
+ * platform engines, where `oklch()` support is not guaranteed, so every token
+ * is the sRGB equivalent.
+ */
+:root {
+  --background: #f2f4f8;
+  --foreground: #212734;
+  --card: #ffffff;
+  --card-foreground: #212734;
+  --popover: #ffffff;
+
+  /* Square-like blue CTA */
+  --primary: #2563eb;
+  --primary-foreground: #fcfcfd;
+  --primary-soft: #e8eefc;
+  --primary-softer: #f3f7fe;
+  --primary-line: #93b4f5;
+
+  --secondary: #f0f2f7;
+  --secondary-foreground: #2c3243;
+  --muted: #eef0f5;
+  --muted-strong: #e4e8ef;
+  --muted-foreground: #6a7385;
+  --accent: #dfe8fb;
+  --destructive: #d92d20;
+
+  --border: #dde2ea;
+  --border-strong: #c6cdd9;
+  --sidebar: #fbfcfe;
+  --ticket: #ffffff;
+
+  --success-fg: #05713f;
+  --success-bg: #d7f4e5;
+  --success-line: #8bd7b4;
+  --warning-fg: #6b3a05;
+  --warning-bg: #fdedc8;
+  --warning-line: #e6bb6a;
+
+  --scrim: rgba(33, 39, 52, 0.45);
+
+  /* Dark passcode/clock-in surface */
+  --lock-bg: #212633;
+  --lock-fg: #ffffff;
+  --lock-dim: rgba(255, 255, 255, 0.55);
+  --lock-faint: rgba(255, 255, 255, 0.35);
+  --lock-line: rgba(255, 255, 255, 0.12);
+  --lock-tile: rgba(255, 255, 255, 0.06);
+  --lock-tile-active: rgba(255, 255, 255, 0.18);
+  --lock-error: #ffb3bd;
+
+  /* Soft category accents */
+  --pastel-1: #e4ebfb;
+  --pastel-2: #e2eefa;
+  --pastel-3: #dcf1ef;
+  --pastel-4: #dff2e4;
+  --pastel-5: #fbeed3;
+  --pastel-6: #fbe6d8;
+  --pastel-7: #fce2e2;
+  --pastel-8: #f7e2f0;
+  --pastel-9: #ece2f7;
+  --pastel-10: #e5e4f7;
+}

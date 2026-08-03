@@ -6,7 +6,7 @@ import {
   useMemo,
   useState,
   type ReactNode,
-} from 'react'
+} from '@lynx-js/react'
 
 import {
   api,
@@ -18,6 +18,7 @@ import {
 } from '@/lib/api'
 import { getOrCreateDeviceKey } from '@/lib/db'
 import { startOutboxWorker, stopOutboxWorker } from '@/lib/outbox'
+import { getItem, removeItem, setItem } from '@/lib/storage'
 
 const STORAGE_KEY = 'mutopos.session.v1'
 
@@ -65,19 +66,34 @@ type SessionContextValue = {
 
 const SessionContext = createContext<SessionContextValue | null>(null)
 
-function loadStored(): StoredSession | null {
+/**
+ * Host storage is async (see lib/storage), unlike the `localStorage` this used
+ * to sit on. An in-memory mirror keeps the synchronous reads the callbacks
+ * below rely on, and is refreshed on every write.
+ */
+let storedMirror: StoredSession | null = null
+
+async function loadStored(): Promise<StoredSession | null> {
+  'background only'
   try {
-    const raw = localStorage.getItem(STORAGE_KEY)
+    const raw = await getItem(STORAGE_KEY)
     if (!raw) return null
-    return JSON.parse(raw) as StoredSession
+    storedMirror = JSON.parse(raw) as StoredSession
+    return storedMirror
   } catch {
     return null
   }
 }
 
+function peekStored(): StoredSession | null {
+  return storedMirror
+}
+
 function saveStored(s: StoredSession | null) {
-  if (!s) localStorage.removeItem(STORAGE_KEY)
-  else localStorage.setItem(STORAGE_KEY, JSON.stringify(s))
+  'background only'
+  storedMirror = s
+  if (!s) void removeItem(STORAGE_KEY)
+  else void setItem(STORAGE_KEY, JSON.stringify(s))
 }
 
 export function SessionProvider({ children }: { children: ReactNode }) {
@@ -94,6 +110,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
   const persist = useCallback(
     (partial: Partial<StoredSession> & { token: string; user: User }) => {
+      'background only'
       const next: StoredSession = {
         token: partial.token,
         user: partial.user,
@@ -121,6 +138,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   }, [token, businessId, outletId, staffId, deviceKey])
 
   const refreshTenantData = useCallback(async () => {
+    'background only'
     if (!token || !businessId) return
     const t: TenantHeaders = {
       token,
@@ -137,7 +155,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       ])
       setOutlets(o.outlets)
       setStaff(s.staff)
-      const cached = loadStored()
+      const cached = peekStored()
       const nextUser = me?.user ?? cached?.user
       const nextMemberships = me?.memberships ?? cached?.memberships ?? []
       if (me?.user) setUser(me.user)
@@ -162,7 +180,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         try {
           await api.registerDevice(t, {
             device_key: deviceKey,
-            label: 'Web POS',
+            label: 'Lynx POS',
             outlet_id: outletId ?? o.outlets[0]?.id,
           })
         } catch {
@@ -177,11 +195,12 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     void (async () => {
-      // Always leave the loading gate, even if TinyBase or /me fails.
+      'background only'
+      // Always leave the loading gate, even if the store or /me fails.
       try {
         const key = await getOrCreateDeviceKey()
         setDeviceKey(key)
-        const stored = loadStored()
+        const stored = await loadStored()
         if (stored?.token) {
           // Offline-first: restore local session immediately so POS can paint
           // cached catalog without waiting on /me.
@@ -270,12 +289,14 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   }, [token, businessId, outletId, staffId, deviceKey])
 
   const requestOTP = useCallback(async (phone: string) => {
+    'background only'
     const res = await api.requestOTP(phone)
     return { dev_code: res.dev_code }
   }, [])
 
   const loginWithOTP = useCallback(
     async (phone: string, code: string, displayName?: string) => {
+      'background only'
       const res = await api.verifyOTP(phone, code, displayName)
       const me = await api.me(res.access_token)
       const biz =
@@ -300,6 +321,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   )
 
   const logout = useCallback(async () => {
+    'background only'
     if (token) {
       try {
         await api.logout(token)
@@ -320,6 +342,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
   const setBusinessId = useCallback(
     (id: string) => {
+      'background only'
       setBusinessIdState(id)
       setOutletIdState(null)
       setStaffIdState(null)
@@ -339,9 +362,17 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
   const setOutletId = useCallback(
     (id: string) => {
+      'background only'
       setOutletIdState(id)
       if (token && user) {
-        persist({ token, user, memberships, businessId: businessId ?? undefined, outletId: id, staffId: staffId ?? undefined })
+        persist({
+          token,
+          user,
+          memberships,
+          businessId: businessId ?? undefined,
+          outletId: id,
+          staffId: staffId ?? undefined,
+        })
       }
     },
     [token, user, memberships, businessId, staffId, persist],
@@ -349,6 +380,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
   const setStaffId = useCallback(
     (id: string) => {
+      'background only'
       setStaffIdState(id)
       if (token && user) {
         persist({
@@ -366,6 +398,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
   const loginAsStaff = useCallback(
     async (id: string, pin: string) => {
+      'background only'
       if (!token || !businessId) {
         throw new Error('Not signed in')
       }
@@ -389,21 +422,14 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         })
       }
     },
-    [
-      token,
-      businessId,
-      outletId,
-      deviceKey,
-      user,
-      memberships,
-      persist,
-    ],
+    [token, businessId, outletId, deviceKey, user, memberships, persist],
   )
 
   const lockStaff = useCallback(() => {
+    'background only'
     setStaffIdState(null)
     if (token && user) {
-      const cached = loadStored()
+      const cached = peekStored()
       saveStored({
         token,
         user,

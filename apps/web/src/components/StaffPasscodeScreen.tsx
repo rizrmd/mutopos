@@ -2,36 +2,33 @@
  * Square-style team passcode clock-in.
  * Step 1: pick team member (grid of tiles)
  * Step 2: numeric PIN pad + filled dots
+ *
+ * The web version also accepted a hardware keyboard through a `window`
+ * `keydown` listener. Lynx has no `window` and no key events, so the on-screen
+ * pad is the only input — which is what the touch hosts actually use.
  */
-import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Delete, Lock, X } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useState } from '@lynx-js/react'
 
+import { Icon } from '@/components/ui/Icon'
 import { ApiError, type Staff } from '@/lib/api'
 import { cn } from '@/lib/utils'
 
-const avatarTints = [
-  'bg-sky-200 text-sky-900',
-  'bg-violet-200 text-violet-900',
-  'bg-amber-200 text-amber-950',
-  'bg-rose-200 text-rose-900',
-  'bg-emerald-200 text-emerald-900',
-  'bg-orange-200 text-orange-950',
-]
-
+const TINT_COUNT = 6
 const PIN_LEN = 4
+const PAD_KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '', '0', 'del']
 
 function initials(name: string) {
   const parts = name.trim().split(/\s+/).filter(Boolean)
   if (parts.length === 0) return '?'
-  if (parts.length === 1) return parts[0].slice(0, 1).toUpperCase()
-  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
+  if (parts.length === 1) return parts[0]!.slice(0, 1).toUpperCase()
+  return (parts[0]![0]! + parts[parts.length - 1]![0]!).toUpperCase()
 }
 
 type Props = {
   open: boolean
   staff: Staff[]
   businessName?: string
-  /** Pre-select a team member (e.g. chip click). */
+  /** Pre-select a team member (e.g. chip tap). */
   initialStaffId?: string | null
   /** Called after a successful PIN verify — parent should call session.loginAsStaff. */
   onVerify: (staffId: string, pin: string) => Promise<void>
@@ -75,9 +72,14 @@ export function StaffPasscodeScreen({
   }, [open, initialStaffId, floor])
 
   const selected = floor.find((s) => s.id === selectedId) ?? null
+  const selectedTint = Math.max(
+    0,
+    floor.findIndex((x) => x.id === selectedId),
+  )
 
   const submit = useCallback(
     async (code: string) => {
+      'background only'
       if (!selectedId || busy) return
       setBusy(true)
       setError(null)
@@ -86,7 +88,7 @@ export function StaffPasscodeScreen({
         setPin('')
       } catch (e) {
         setShake(true)
-        window.setTimeout(() => setShake(false), 400)
+        setTimeout(() => setShake(false), 400)
         setPin('')
         if (e instanceof ApiError) {
           if (e.code === 'pin_not_set') {
@@ -108,6 +110,7 @@ export function StaffPasscodeScreen({
 
   const pushDigit = useCallback(
     (d: string) => {
+      'background only'
       if (busy || !selectedId) return
       setError(null)
       setPin((prev) => {
@@ -115,7 +118,7 @@ export function StaffPasscodeScreen({
         const next = prev + d
         if (next.length === PIN_LEN) {
           // auto-submit after last digit (Square behavior)
-          queueMicrotask(() => void submit(next))
+          setTimeout(() => void submit(next), 0)
         }
         return next
       })
@@ -124,213 +127,183 @@ export function StaffPasscodeScreen({
   )
 
   const backspace = useCallback(() => {
+    'background only'
     if (busy) return
     setError(null)
     setPin((p) => p.slice(0, -1))
   }, [busy])
 
-  // Hardware keyboard support on PIN step
-  useEffect(() => {
-    if (!open || !selectedId) return
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key >= '0' && e.key <= '9') {
-        e.preventDefault()
-        pushDigit(e.key)
-      } else if (e.key === 'Backspace') {
-        e.preventDefault()
-        backspace()
-      } else if (e.key === 'Escape' && !required && onClose) {
-        onClose()
-      }
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [open, selectedId, pushDigit, backspace, required, onClose])
-
   if (!open) return null
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex flex-col bg-[oklch(0.22_0.02_265)] text-white"
-      role="dialog"
-      aria-modal="true"
-      aria-label="Team passcode"
-    >
+    <view className="mp-lock">
       {/* Top bar */}
-      <div className="flex h-14 shrink-0 items-center justify-between border-b border-white/10 px-4">
-        <div className="flex items-center gap-2 text-sm text-white/70">
-          <Lock className="size-4" aria-hidden />
-          <span className="font-medium tracking-wide">
+      <view className="mp-lock__bar">
+        <view className="mp-lock__brand">
+          <Icon name="lock" size={16} color="rgba(255,255,255,0.55)" />
+          <text className="mp-lock__brand-text">
             {businessName?.trim() || 'MutoPOS'}
-          </span>
-        </div>
+          </text>
+        </view>
         {!required && onClose ? (
-          <button
-            type="button"
-            onClick={onClose}
-            className="inline-flex size-10 items-center justify-center text-white/70 hover:bg-white/10 hover:text-white"
-            aria-label="Close"
+          <view
+            className="mp-lock__close"
+            accessibility-label="Close"
+            bindtap={() => {
+              'background only'
+              onClose()
+            }}
           >
-            <X className="size-5" />
-          </button>
+            <Icon name="x" size={20} color="rgba(255,255,255,0.55)" />
+          </view>
         ) : (
-          <div className="size-10" />
+          <view className="mp-lock__close" />
         )}
-      </div>
+      </view>
 
-      <div className="flex min-h-0 flex-1 flex-col items-center justify-center overflow-y-auto p-6">
-        {!selected ? (
-          <>
-            <h1 className="mb-2 text-center text-2xl font-semibold tracking-tight">
-              Who&apos;s clocking in?
-            </h1>
-            <p className="mb-8 max-w-md text-center text-sm text-white/55">
-              Select your name, then enter your 4-digit passcode.
-            </p>
-            <div className="grid w-full max-w-2xl grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
-              {floor.map((s, i) => (
-                <button
-                  key={s.id}
-                  type="button"
-                  onClick={() => {
-                    setSelectedId(s.id)
-                    setPin('')
-                    setError(null)
-                  }}
-                  className="flex flex-col items-center gap-3 border border-white/10 bg-white/5 p-5 transition-colors hover:bg-white/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/40"
-                >
-                  <span
-                    className={cn(
-                      'flex size-16 items-center justify-center text-xl font-bold',
-                      avatarTints[i % avatarTints.length],
-                    )}
+      <scroll-view scroll-orientation="vertical" className="mp-lock__body">
+        <view className="mp-lock__inner">
+          {!selected ? (
+            <>
+              <text className="mp-lock__h1">Who&apos;s clocking in?</text>
+              <text className="mp-lock__hint">
+                Select your name, then enter your 4-digit passcode.
+              </text>
+              <view className="mp-lock__grid">
+                {floor.map((s, i) => (
+                  <view
+                    key={s.id}
+                    className="mp-lock__tile"
+                    bindtap={() => {
+                      'background only'
+                      setSelectedId(s.id)
+                      setPin('')
+                      setError(null)
+                    }}
                   >
-                    {initials(s.display_name)}
-                  </span>
-                  <span className="text-center text-sm font-semibold leading-tight">
-                    {s.display_name}
-                  </span>
-                  <span className="text-[11px] uppercase tracking-wider text-white/40">
-                    {s.role}
-                    {s.has_pin === false ? ' · no pin' : ''}
-                  </span>
-                </button>
-              ))}
-            </div>
-            {floor.length === 0 ? (
-              <p className="mt-6 text-sm text-white/50">
-                No active team members. Add staff in the admin console.
-              </p>
-            ) : null}
-          </>
-        ) : (
-          <div className="flex w-full max-w-sm flex-col items-center">
-            <button
-              type="button"
-              className="mb-6 text-sm text-white/50 hover:text-white"
-              onClick={() => {
-                setSelectedId(null)
-                setPin('')
-                setError(null)
-              }}
-            >
-              ← All team members
-            </button>
+                    <view
+                      className={cn(
+                        'mp-lock__tile-avatar',
+                        `mp-ltint-${i % TINT_COUNT}`,
+                      )}
+                    >
+                      <text
+                        className={cn(
+                          'mp-lock__tile-initials',
+                          `mp-ltint-${i % TINT_COUNT}-text`,
+                        )}
+                      >
+                        {initials(s.display_name)}
+                      </text>
+                    </view>
+                    <text className="mp-lock__tile-name">
+                      {s.display_name}
+                    </text>
+                    <text className="mp-lock__tile-role">
+                      {s.role.toUpperCase()}
+                      {s.has_pin === false ? ' · NO PIN' : ''}
+                    </text>
+                  </view>
+                ))}
+              </view>
+              {floor.length === 0 ? (
+                <text className="mp-lock__empty">
+                  No active team members. Add staff in the admin console.
+                </text>
+              ) : null}
+            </>
+          ) : (
+            <view className="mp-pin">
+              <text
+                className="mp-pin__back"
+                bindtap={() => {
+                  'background only'
+                  setSelectedId(null)
+                  setPin('')
+                  setError(null)
+                }}
+              >
+                ← All team members
+              </text>
 
-            <span
-              className={cn(
-                'mb-3 flex size-20 items-center justify-center text-2xl font-bold',
-                avatarTints[
-                  Math.max(
-                    0,
-                    floor.findIndex((x) => x.id === selected.id),
-                  ) % avatarTints.length
-                ],
-              )}
-            >
-              {initials(selected.display_name)}
-            </span>
-            <h1 className="mb-1 text-center text-xl font-semibold">
-              {selected.display_name}
-            </h1>
-            <p className="mb-8 text-sm text-white/50">Enter passcode</p>
-
-            {/* PIN dots */}
-            <div
-              className={cn(
-                'mb-3 flex items-center gap-3',
-                shake && 'animate-[shake_0.35s_ease-in-out]',
-              )}
-              aria-live="polite"
-            >
-              {Array.from({ length: PIN_LEN }).map((_, i) => (
-                <span
-                  key={i}
+              <view
+                className={cn(
+                  'mp-pin__avatar',
+                  `mp-ltint-${selectedTint % TINT_COUNT}`,
+                )}
+              >
+                <text
                   className={cn(
-                    'size-3.5 border-2 transition-colors',
-                    i < pin.length
-                      ? 'border-white bg-white'
-                      : 'border-white/35 bg-transparent',
+                    'mp-pin__initials',
+                    `mp-ltint-${selectedTint % TINT_COUNT}-text`,
                   )}
-                />
-              ))}
-            </div>
-            <div className="mb-6 min-h-5 text-center text-sm text-rose-300">
-              {error ?? (busy ? 'Checking…' : '\u00a0')}
-            </div>
+                >
+                  {initials(selected.display_name)}
+                </text>
+              </view>
+              <text className="mp-pin__name">{selected.display_name}</text>
+              <text className="mp-pin__prompt">Enter passcode</text>
 
-            {/* Numeric pad — Square-like 3×4 */}
-            <div className="grid w-full grid-cols-3 gap-2">
-              {['1', '2', '3', '4', '5', '6', '7', '8', '9', '', '0', 'del'].map(
-                (key) => {
+              {/* PIN dots */}
+              <view className={cn('mp-pin__dots', shake && 'is-shaking')}>
+                {Array.from({ length: PIN_LEN }).map((_, i) => (
+                  <view
+                    key={i}
+                    className={cn('mp-pin__dot', i < pin.length && 'is-filled')}
+                  />
+                ))}
+              </view>
+              <text className="mp-pin__status">
+                {error ?? (busy ? 'Checking…' : ' ')}
+              </text>
+
+              {/* Numeric pad — Square-like 3×4 */}
+              <view className="mp-pad">
+                {PAD_KEYS.map((key, i) => {
                   if (key === '') {
-                    return <div key="spacer" />
+                    return <view key={`spacer-${i}`} className="mp-pad__spacer" />
                   }
                   if (key === 'del') {
                     return (
-                      <button
+                      <view
                         key="del"
-                        type="button"
-                        disabled={busy}
-                        onClick={backspace}
-                        className="flex h-16 items-center justify-center bg-white/5 text-white/80 transition-colors hover:bg-white/12 active:bg-white/20 disabled:opacity-40"
-                        aria-label="Delete"
+                        className={cn('mp-pad__key', busy && 'is-disabled')}
+                        accessibility-label="Delete"
+                        bindtap={() => {
+                          'background only'
+                          backspace()
+                        }}
                       >
-                        <Delete className="size-5" />
-                      </button>
+                        <Icon
+                          name="delete"
+                          size={20}
+                          color="rgba(255,255,255,0.8)"
+                        />
+                      </view>
                     )
                   }
                   return (
-                    <button
+                    <view
                       key={key}
-                      type="button"
-                      disabled={busy}
-                      onClick={() => pushDigit(key)}
-                      className="h-16 text-2xl font-medium tabular-nums bg-white/5 transition-colors hover:bg-white/12 active:bg-white/20 disabled:opacity-40"
+                      className={cn('mp-pad__key', busy && 'is-disabled')}
+                      bindtap={() => {
+                        'background only'
+                        pushDigit(key)
+                      }}
                     >
-                      {key}
-                    </button>
+                      <text className="mp-pad__key-text mp-num">{key}</text>
+                    </view>
                   )
-                },
-              )}
-            </div>
+                })}
+              </view>
 
-            <p className="mt-8 text-center text-[11px] text-white/35">
-              Ask an owner if you need a passcode reset.
-            </p>
-          </div>
-        )}
-      </div>
-
-      <style>{`
-        @keyframes shake {
-          0%, 100% { transform: translateX(0); }
-          20% { transform: translateX(-6px); }
-          40% { transform: translateX(6px); }
-          60% { transform: translateX(-4px); }
-          80% { transform: translateX(4px); }
-        }
-      `}</style>
-    </div>
+              <text className="mp-pin__footnote">
+                Ask an owner if you need a passcode reset.
+              </text>
+            </view>
+          )}
+        </view>
+      </scroll-view>
+    </view>
   )
 }

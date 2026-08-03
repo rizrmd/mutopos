@@ -8,7 +8,7 @@ MutoPOS is a **point-of-sale (POS)** product that must keep working when connect
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│  Client (browser / PWA / Electron shell)                    │
+│  Client (LynxJS: iOS / Android / HarmonyOS / web)           │
 │                                                             │
 │  UI (cart, stock, multi-observer)                           │
 │       │                                                     │
@@ -20,6 +20,9 @@ MutoPOS is a **point-of-sale (POS)** product that must keep working when connect
 │       │                                                     │
 │       ▼                                                     │
 │  Local store (default: TinyBase)  +  Outbox table           │
+│       │                                                     │
+│       ▼                                                     │
+│  Host key/value storage  ◄── platform seam (lib/storage.ts) │
 │       │                                                     │
 │       │  push when online                                   │
 │       ▼                                                     │
@@ -67,6 +70,7 @@ POS data (inventory, prices, multi-device cashiers, refunds) must not diverge pe
 
 - [SaaS ERD (entities, multi-tenant, outbox tables)](../erd.md)
 - [ADR 0001 — Offline-first + custom outbox](./adr/0001-offline-first-custom-outbox.md)
+- [ADR 0004 — LynxJS client runtime](./adr/0004-lynxjs-client.md)
 - [Local store (TinyBase default)](./local-store.md)
 - [Outbox & sync path](./outbox-sync.md)
 - [ADR 0003 — TinyBase default](./adr/0003-tinybase-default-local-store.md)

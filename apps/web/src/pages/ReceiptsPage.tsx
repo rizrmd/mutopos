@@ -1,29 +1,20 @@
-import { useCallback, useEffect, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { useCallback, useEffect, useState } from '@lynx-js/react'
+import { useNavigate, useParams } from 'react-router'
 
-import { Button } from '@/components/ui/button'
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card'
-import { api, formatMoney, type Sale } from '@/lib/api'
+import { Button } from '@/components/ui/Button'
+import { Card, CardContent, CardHeader } from '@/components/ui/Card'
+import { Icon } from '@/components/ui/Icon'
+import { api, type Sale } from '@/lib/api'
 import { listLocalSales } from '@/lib/db'
+import { formatMoney, formatStamp } from '@/lib/format'
 import { useSession } from '@/lib/session'
 import { cn } from '@/lib/utils'
 
-const TINTS = [
-  'bg-emerald-500',
-  'bg-rose-500',
-  'bg-amber-400',
-  'bg-sky-500',
-  'bg-violet-500',
-]
+const MARK_COUNT = 5
 
 export function ReceiptsPage() {
   const { tenant, businessId, memberships } = useSession()
+  const navigate = useNavigate()
   const currency =
     memberships.find((m) => m.business_id === businessId)?.currency_code ??
     'USD'
@@ -35,6 +26,7 @@ export function ReceiptsPage() {
   const [error, setError] = useState<string | null>(null)
 
   const load = useCallback(async () => {
+    'background only'
     if (!tenant || !businessId) return
     try {
       const res = await api.listSales(tenant)
@@ -58,110 +50,104 @@ export function ReceiptsPage() {
   }, [load])
 
   return (
-    <div className="mx-auto max-w-5xl space-y-5">
-      <div>
-        <h1 className="text-xl font-bold tracking-tight">Transactions</h1>
-        <p className="text-sm text-muted-foreground">
+    <view className="mp-page">
+      <view>
+        <text className="mp-title">Transactions</text>
+        <text className="mp-subtitle">
           Completed sales from the server and local device cache.
-        </p>
-      </div>
+        </text>
+      </view>
 
-      {error ? (
-        <p className="text-sm font-medium text-destructive">{error}</p>
-      ) : null}
+      {error ? <text className="mp-error-text">{error}</text> : null}
 
       <Card>
-        <CardHeader className="p-4 pb-2">
-          <CardTitle className="text-base">Synced sales</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-2 p-4 pt-2">
-          {sales.map((s, i) => (
-            <Link
-              key={s.id}
-              to={`/receipts/${s.id}`}
-              className="flex items-center gap-3 border border-border px-3 py-2.5 text-sm transition hover:bg-muted"
-            >
-              <span
-                className={cn(
-                  'flex size-8 shrink-0 items-center justify-center text-[10px] font-bold text-white',
-                  TINTS[i % TINTS.length],
-                )}
+        <CardHeader title="Synced sales" />
+        <CardContent>
+          <view className="mp-list">
+            {sales.map((s, i) => (
+              <view
+                key={s.id}
+                className="mp-list__row"
+                bindtap={() => {
+                  'background only'
+                  navigate(`/receipts/${s.id}`)
+                }}
               >
-                {(s.receipt_no ?? s.id).slice(0, 2).toUpperCase()}
-              </span>
-              <div className="min-w-0 flex-1">
-                <div className="font-semibold">
-                  {s.receipt_no ?? s.id.slice(0, 8)}
-                </div>
-                <div className="text-xs text-muted-foreground">
-                  {s.status} · {s.completed_at ?? s.created_at}
-                </div>
-              </div>
-              <div className="font-bold tabular-nums">
-                {money(s.total_minor)}
-              </div>
-            </Link>
-          ))}
-          {sales.length === 0 ? (
-            <p className="py-6 text-center text-sm text-muted-foreground">
-              No server sales yet.
-            </p>
-          ) : null}
+                <view
+                  className={cn('mp-list__mark', `mp-mark-${i % MARK_COUNT}`)}
+                >
+                  <text className="mp-list__mark-text">
+                    {(s.receipt_no ?? s.id).slice(0, 2).toUpperCase()}
+                  </text>
+                </view>
+                <view className="mp-fill">
+                  <text className="mp-list__title mp-truncate">
+                    {s.receipt_no ?? s.id.slice(0, 8)}
+                  </text>
+                  <text className="mp-list__sub mp-truncate">
+                    {s.status} · {formatStamp(s.completed_at ?? s.created_at)}
+                  </text>
+                </view>
+                <text className="mp-list__amount mp-num">
+                  {money(s.total_minor)}
+                </text>
+              </view>
+            ))}
+            {sales.length === 0 ? (
+              <text className="mp-list__empty">No server sales yet.</text>
+            ) : null}
+          </view>
         </CardContent>
       </Card>
 
       <Card>
-        <CardHeader className="p-4 pb-2">
-          <CardTitle className="text-base">On this device</CardTitle>
-          <CardDescription>
-            Offline sales sync automatically when the device is online.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="p-4 pt-2">
-          <ul className="space-y-2 text-sm">
+        <CardHeader
+          title="On this device"
+          description="Offline sales sync automatically when the device is online."
+        />
+        <CardContent>
+          <view className="mp-list">
             {localPending.map((s, i) => (
-              <li
-                key={s.id}
-                className="flex items-center gap-3 border border-border px-3 py-2.5"
-              >
-                <span
-                  className={cn(
-                    'flex size-8 shrink-0 items-center justify-center text-[10px] font-bold text-white',
-                    TINTS[i % TINTS.length],
-                  )}
+              <view key={s.id} className="mp-list__row">
+                <view
+                  className={cn('mp-list__mark', `mp-mark-${i % MARK_COUNT}`)}
                 >
-                  {s.id.slice(0, 2).toUpperCase()}
-                </span>
-                <div className="min-w-0 flex-1">
-                  <div className="font-semibold">{s.id.slice(0, 8)}…</div>
-                  <div className="text-xs font-medium">
-                    {s.synced ? (
-                      <span className="text-emerald-800">Synced</span>
-                    ) : (
-                      <span className="text-amber-800">Pending sync</span>
+                  <text className="mp-list__mark-text">
+                    {s.id.slice(0, 2).toUpperCase()}
+                  </text>
+                </view>
+                <view className="mp-fill">
+                  <text className="mp-list__title mp-truncate">
+                    {s.id.slice(0, 8)}…
+                  </text>
+                  <text
+                    className={cn(
+                      'mp-product__state',
+                      !s.synced && 'is-inactive',
                     )}
-                  </div>
-                </div>
-                <span className="font-bold tabular-nums">
+                  >
+                    {s.synced ? 'Synced' : 'Pending sync'}
+                  </text>
+                </view>
+                <text className="mp-list__amount mp-num">
                   {money(s.totalMinor)}
-                </span>
-              </li>
+                </text>
+              </view>
             ))}
             {localPending.length === 0 ? (
-              <li className="py-6 text-center text-muted-foreground">
-                No local sales cached.
-              </li>
+              <text className="mp-list__empty">No local sales cached.</text>
             ) : null}
-          </ul>
+          </view>
         </CardContent>
       </Card>
-    </div>
+    </view>
   )
 }
 
 export function ReceiptDetailPage() {
   const { id } = useParams()
   const { tenant } = useSession()
+  const navigate = useNavigate()
   const [sale, setSale] = useState<Sale | null>(null)
   const [error, setError] = useState<string | null>(null)
 
@@ -174,58 +160,58 @@ export function ReceiptDetailPage() {
   }, [tenant, id])
 
   if (error) {
-    return <p className="font-medium text-destructive">{error}</p>
+    return <text className="mp-error-text">{error}</text>
   }
   if (!sale) {
-    return <p className="text-muted-foreground">Loading…</p>
+    return <text className="mp-subtitle">Loading…</text>
   }
 
   const money = (n: number) => formatMoney(n, sale.currency_code || 'USD')
+  const payments =
+    (sale.payments ?? [])
+      .map((p) => `${p.method} ${money(p.amount_minor)}`)
+      .join(', ') || '—'
 
   return (
-    <div className="mx-auto max-w-lg space-y-4">
-      <Button variant="outline" size="sm" asChild>
-        <Link to="/receipts">← Back</Link>
+    <view className="mp-page">
+      <Button
+        size="sm"
+        variant="outline"
+        label="Back"
+        onTap={() => navigate('/receipts')}
+      >
+        <Icon name="arrow-left" size={14} />
       </Button>
       <Card>
-        <CardHeader className="p-4 pb-2">
-          <CardTitle>
-            Receipt {sale.receipt_no ?? sale.id.slice(0, 8)}
-          </CardTitle>
-          <CardDescription>
-            {sale.status} · {sale.completed_at ?? sale.created_at}
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-3 p-4 pt-2 text-sm">
-          <ul className="space-y-2">
-            {(sale.lines ?? []).map((l, i) => (
-              <li key={l.id ?? i} className="flex justify-between gap-3">
-                <span className="flex gap-2">
-                  <span className="w-4 text-xs font-semibold text-muted-foreground">
-                    {i + 1}
-                  </span>
-                  <span className="font-medium">
-                    {l.name_snapshot} × {l.qty}
-                  </span>
-                </span>
-                <span className="font-bold tabular-nums">
-                  {money(l.line_total_minor)}
-                </span>
-              </li>
-            ))}
-          </ul>
-          <div className="flex justify-between border-t border-border pt-3 text-base font-bold">
-            <span>Total</span>
-            <span className="tabular-nums">{money(sale.total_minor)}</span>
-          </div>
-          <div className="text-muted-foreground">
-            Payments:{' '}
-            {(sale.payments ?? [])
-              .map((p) => `${p.method} ${money(p.amount_minor)}`)
-              .join(', ') || '—'}
-          </div>
+        <CardHeader
+          title={`Receipt ${sale.receipt_no ?? sale.id.slice(0, 8)}`}
+          description={`${sale.status} · ${formatStamp(
+            sale.completed_at ?? sale.created_at,
+          )}`}
+        />
+        <CardContent>
+          {(sale.lines ?? []).map((l, i) => (
+            <view key={l.id ?? String(i)} className="mp-receipt__line">
+              <view className="mp-row">
+                <text className="mp-receipt__index mp-num">{i + 1}</text>
+                <text className="mp-receipt__name">
+                  {l.name_snapshot} × {l.qty}
+                </text>
+              </view>
+              <text className="mp-receipt__amount mp-num">
+                {money(l.line_total_minor)}
+              </text>
+            </view>
+          ))}
+          <view className="mp-receipt__total">
+            <text className="mp-receipt__total-text">Total</text>
+            <text className="mp-receipt__total-text mp-num">
+              {money(sale.total_minor)}
+            </text>
+          </view>
+          <text className="mp-receipt__payments">Payments: {payments}</text>
         </CardContent>
       </Card>
-    </div>
+    </view>
   )
 }

@@ -1,5 +1,8 @@
-import { createStore, type Store } from 'tinybase'
-import { createIndexedDbPersister, type IndexedDbPersister } from 'tinybase/persisters/persister-indexed-db'
+import { createStore, type Content, type Store } from 'tinybase'
+import { createCustomPersister, type Persister } from 'tinybase/persisters'
+
+import { getItem, setItem, storageBackend } from '@/lib/storage'
+import { uuidv4 } from '@/lib/uuid'
 
 export type OutboxDoc = {
   id: string
@@ -50,11 +53,11 @@ export const TABLES = {
   meta: 'meta',
 } as const
 
-const DEVICE_KEY_LS = 'mutopos.device_key'
-const IDB_NAME = 'mutopos-tinybase'
+const DEVICE_KEY_FALLBACK = 'mutopos.device_key'
+const STORAGE_KEY = 'mutopos.tinybase.v1'
 
 let store: Store | null = null
-let persister: IndexedDbPersister | null = null
+let persister: Persister | null = null
 let initPromise: Promise<Store> | null = null
 
 function asString(v: unknown, fallback = ''): string {
@@ -79,12 +82,12 @@ function asBool(v: unknown, fallback = false): boolean {
 }
 
 function rowToOutbox(id: string, row: Record<string, unknown>): OutboxDoc {
-  const status = asString(row.status, 'pending') as OutboxDoc['status']
+  const status = asString(row['status'], 'pending') as OutboxDoc['status']
   return {
     id,
-    type: asString(row.type),
-    payload: asString(row.payload, '{}'),
-    createdAt: asNumber(row.createdAt),
+    type: asString(row['type']),
+    payload: asString(row['payload'], '{}'),
+    createdAt: asNumber(row['createdAt']),
     status:
       status === 'in_flight' ||
       status === 'sent' ||
@@ -92,58 +95,100 @@ function rowToOutbox(id: string, row: Record<string, unknown>): OutboxDoc {
       status === 'pending'
         ? status
         : 'pending',
-    attempts: asNumber(row.attempts),
-    lastError: asString(row.lastError) || undefined,
-    businessId: asString(row.businessId),
-    resultJson: asString(row.resultJson) || undefined,
+    attempts: asNumber(row['attempts']),
+    lastError: asString(row['lastError']) || undefined,
+    businessId: asString(row['businessId']),
+    resultJson: asString(row['resultJson']) || undefined,
   }
 }
 
 function rowToSale(id: string, row: Record<string, unknown>): LocalSaleDoc {
   return {
     id,
-    businessId: asString(row.businessId),
-    outletId: asString(row.outletId),
-    clientSaleId: asString(row.clientSaleId, id),
-    status: asString(row.status, 'completed'),
-    totalMinor: asNumber(row.totalMinor),
-    receiptNo: asString(row.receiptNo) || undefined,
-    serverId: asString(row.serverId) || undefined,
-    linesJson: asString(row.linesJson, '[]'),
-    createdAt: asNumber(row.createdAt),
-    synced: asBool(row.synced),
+    businessId: asString(row['businessId']),
+    outletId: asString(row['outletId']),
+    clientSaleId: asString(row['clientSaleId'], id),
+    status: asString(row['status'], 'completed'),
+    totalMinor: asNumber(row['totalMinor']),
+    receiptNo: asString(row['receiptNo']) || undefined,
+    serverId: asString(row['serverId']) || undefined,
+    linesJson: asString(row['linesJson'], '[]'),
+    createdAt: asNumber(row['createdAt']),
+    synced: asBool(row['synced']),
   }
 }
 
-function rowToProduct(id: string, row: Record<string, unknown>): LocalProductDoc {
+function rowToProduct(
+  id: string,
+  row: Record<string, unknown>,
+): LocalProductDoc {
   return {
     id,
-    businessId: asString(row.businessId),
-    name: asString(row.name),
-    sku: asString(row.sku) || undefined,
-    priceMinor: asNumber(row.priceMinor),
-    isActive: asBool(row.isActive, true),
-    updatedAt: asNumber(row.updatedAt),
+    businessId: asString(row['businessId']),
+    name: asString(row['name']),
+    sku: asString(row['sku']) || undefined,
+    priceMinor: asNumber(row['priceMinor']),
+    isActive: asBool(row['isActive'], true),
+    updatedAt: asNumber(row['updatedAt']),
   }
 }
 
 /**
- * Open the TinyBase store and load from IndexedDB (auto-save enabled).
+ * TinyBase persister backed by the Lynx host key/value store.
+ *
+ * The IndexedDB persister is a browser-only package, so the whole store is
+ * serialised to one JSON blob instead. That is fine at POS scale (a cached
+ * catalog plus a short outbox), and writes are debounced by TinyBase's own
+ * auto-save scheduling.
+ */
+function createLynxPersister(s: Store): Persister {
+  return createCustomPersister(
+    s,
+    // getPersisted
+    async () => {
+      'background only'
+      const raw = await getItem(STORAGE_KEY)
+      if (!raw) return undefined
+      try {
+        const parsed = JSON.parse(raw) as Content
+        if (!Array.isArray(parsed) || parsed.length < 2) return undefined
+        return parsed
+      } catch (err) {
+        console.error('[mutopos] corrupt local store; starting empty', err)
+        return undefined
+      }
+    },
+    // setPersisted
+    async (getContent) => {
+      'background only'
+      await setItem(STORAGE_KEY, JSON.stringify(getContent()))
+    },
+    // addPersisterListener — nothing else writes this key, so no change feed.
+    () => undefined,
+    // delPersisterListener
+    () => undefined,
+    (err) => console.error('[mutopos] persister error', err),
+  )
+}
+
+/**
+ * Open the TinyBase store and load it from host storage (auto-save enabled).
  * Safe to call many times; concurrent callers share one init promise.
  */
 export async function getStore(): Promise<Store> {
+  'background only'
   if (store) return store
   if (!initPromise) {
     initPromise = (async () => {
       const s = createStore()
       try {
-        const p = createIndexedDbPersister(s, IDB_NAME)
+        const p = createLynxPersister(s)
         await p.load()
         await p.startAutoSave()
         persister = p
       } catch (err) {
         console.error(
-          '[mutopos] TinyBase IndexedDB persister unavailable; in-memory only',
+          '[mutopos] local persistence unavailable; in-memory only',
           err,
         )
       }
@@ -190,39 +235,33 @@ export function subscribeTable(
   }
 }
 
-function randomDeviceKey(): string {
-  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
-    return crypto.randomUUID()
-  }
-  return `dev-${Date.now()}`
-}
-
 export async function getOrCreateDeviceKey(): Promise<string> {
+  'background only'
   try {
     const s = await getStore()
     const existing = s.getCell(TABLES.meta, 'device_key', 'value')
     if (typeof existing === 'string' && existing) return existing
-    const key = randomDeviceKey()
+    const key = uuidv4()
     s.setRow(TABLES.meta, 'device_key', { value: key })
     try {
-      localStorage.setItem(DEVICE_KEY_LS, key)
+      await setItem(DEVICE_KEY_FALLBACK, key)
     } catch {
       /* ignore */
     }
     return key
   } catch (err) {
     console.error(
-      '[mutopos] TinyBase unavailable; using localStorage device key',
+      '[mutopos] TinyBase unavailable; using raw storage device key',
       err,
     )
     try {
-      const cached = localStorage.getItem(DEVICE_KEY_LS)
+      const cached = await getItem(DEVICE_KEY_FALLBACK)
       if (cached) return cached
-      const key = randomDeviceKey()
-      localStorage.setItem(DEVICE_KEY_LS, key)
+      const key = uuidv4()
+      await setItem(DEVICE_KEY_FALLBACK, key)
       return key
     } catch {
-      return randomDeviceKey()
+      return uuidv4()
     }
   }
 }
@@ -233,6 +272,7 @@ export async function enqueueOutbox(entry: {
   payload: unknown
   businessId: string
 }): Promise<void> {
+  'background only'
   const s = await getStore()
   s.setRow(TABLES.outbox, entry.id, {
     type: entry.type,
@@ -247,6 +287,7 @@ export async function enqueueOutbox(entry: {
 }
 
 export async function listOutboxDocs(): Promise<OutboxDoc[]> {
+  'background only'
   const s = await getStore()
   const table = s.getTable(TABLES.outbox)
   return Object.entries(table).map(([id, row]) =>
@@ -257,6 +298,7 @@ export async function listOutboxDocs(): Promise<OutboxDoc[]> {
 export async function listPendingOutbox(
   businessId: string,
 ): Promise<OutboxDoc[]> {
+  'background only'
   const all = await listOutboxDocs()
   return all
     .filter(
@@ -276,15 +318,16 @@ export async function patchOutbox(
     >
   >,
 ): Promise<void> {
+  'background only'
   const s = await getStore()
   if (!s.hasRow(TABLES.outbox, id)) return
   const cells: Record<string, string | number | boolean> = {}
-  if (patch.status !== undefined) cells.status = patch.status
-  if (patch.attempts !== undefined) cells.attempts = patch.attempts
-  if (patch.lastError !== undefined) cells.lastError = patch.lastError
-  if (patch.resultJson !== undefined) cells.resultJson = patch.resultJson
-  if (patch.payload !== undefined) cells.payload = patch.payload
-  if (patch.type !== undefined) cells.type = patch.type
+  if (patch.status !== undefined) cells['status'] = patch.status
+  if (patch.attempts !== undefined) cells['attempts'] = patch.attempts
+  if (patch.lastError !== undefined) cells['lastError'] = patch.lastError
+  if (patch.resultJson !== undefined) cells['resultJson'] = patch.resultJson
+  if (patch.payload !== undefined) cells['payload'] = patch.payload
+  if (patch.type !== undefined) cells['type'] = patch.type
   if (Object.keys(cells).length) s.setPartialRow(TABLES.outbox, id, cells)
 }
 
@@ -298,6 +341,7 @@ export async function cacheProducts(
     is_active: boolean
   }>,
 ): Promise<void> {
+  'background only'
   const s = await getStore()
   const now = Date.now()
   for (const p of products) {
@@ -345,6 +389,7 @@ export async function cacheCatalog(
   products: CatalogSnapshot['products'],
   categories: CatalogSnapshot['categories'],
 ): Promise<void> {
+  'background only'
   const s = await getStore()
   const value = JSON.stringify({
     products,
@@ -358,6 +403,7 @@ export async function cacheCatalog(
 export async function getLocalCatalog(
   businessId: string,
 ): Promise<CatalogSnapshot | null> {
+  'background only'
   try {
     const s = await getStore()
     const snap = s.getCell(TABLES.meta, catalogMetaId(businessId), 'value')
@@ -408,6 +454,7 @@ export async function insertLocalSale(
     serverId?: string
   },
 ): Promise<void> {
+  'background only'
   const s = await getStore()
   s.setRow(TABLES.sales, sale.id, {
     businessId: sale.businessId,
@@ -432,21 +479,23 @@ export async function patchLocalSale(
     >
   >,
 ): Promise<void> {
+  'background only'
   const s = await getStore()
   if (!s.hasRow(TABLES.sales, id)) return
   const cells: Record<string, string | number | boolean> = {}
-  if (patch.synced !== undefined) cells.synced = patch.synced
-  if (patch.status !== undefined) cells.status = patch.status
-  if (patch.serverId !== undefined) cells.serverId = patch.serverId
-  if (patch.receiptNo !== undefined) cells.receiptNo = patch.receiptNo
-  if (patch.totalMinor !== undefined) cells.totalMinor = patch.totalMinor
-  if (patch.linesJson !== undefined) cells.linesJson = patch.linesJson
+  if (patch.synced !== undefined) cells['synced'] = patch.synced
+  if (patch.status !== undefined) cells['status'] = patch.status
+  if (patch.serverId !== undefined) cells['serverId'] = patch.serverId
+  if (patch.receiptNo !== undefined) cells['receiptNo'] = patch.receiptNo
+  if (patch.totalMinor !== undefined) cells['totalMinor'] = patch.totalMinor
+  if (patch.linesJson !== undefined) cells['linesJson'] = patch.linesJson
   if (Object.keys(cells).length) s.setPartialRow(TABLES.sales, id, cells)
 }
 
 export async function findLocalSaleByClientId(
   clientSaleId: string,
 ): Promise<LocalSaleDoc | null> {
+  'background only'
   const s = await getStore()
   // Prefer row id === clientSaleId (how we insert).
   if (s.hasRow(TABLES.sales, clientSaleId)) {
@@ -465,6 +514,7 @@ export async function listLocalSales(
   businessId: string,
   opts?: { limit?: number },
 ): Promise<LocalSaleDoc[]> {
+  'background only'
   const s = await getStore()
   const table = s.getTable(TABLES.sales)
   const list = Object.entries(table)
@@ -475,8 +525,12 @@ export async function listLocalSales(
   return list
 }
 
+/** Which host storage the local store landed on ('native' | 'session' | 'memory'). */
+export { storageBackend }
+
 /** Test / teardown helper — stops auto-save and drops in-memory refs. */
 export async function destroyStore(): Promise<void> {
+  'background only'
   if (persister) {
     try {
       await persister.destroy()

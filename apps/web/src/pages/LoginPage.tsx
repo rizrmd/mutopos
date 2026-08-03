@@ -1,16 +1,10 @@
-import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { Smartphone } from 'lucide-react'
+import { useState } from '@lynx-js/react'
+import { useNavigate } from 'react-router'
 
-import { Button } from '@/components/ui/button'
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
+import { Button } from '@/components/ui/Button'
+import { Card, CardContent, CardHeader } from '@/components/ui/Card'
+import { Icon } from '@/components/ui/Icon'
+import { TextField } from '@/components/ui/TextField'
 import { useSession } from '@/lib/session'
 
 export function LoginPage() {
@@ -25,6 +19,7 @@ export function LoginPage() {
   const [busy, setBusy] = useState(false)
 
   async function onRequest() {
+    'background only'
     setError(null)
     setBusy(true)
     try {
@@ -40,6 +35,7 @@ export function LoginPage() {
   }
 
   async function onVerify() {
+    'background only'
     setError(null)
     setBusy(true)
     try {
@@ -53,115 +49,85 @@ export function LoginPage() {
   }
 
   return (
-    <div className="flex min-h-svh items-center justify-center bg-background p-4">
-      <Card className="w-full max-w-md">
-        <CardHeader className="space-y-3 p-5">
-          <div className="flex items-center gap-3">
-            <div className="flex size-10 items-center justify-center bg-primary text-primary-foreground">
-              <Smartphone className="size-5" />
-            </div>
-            <div>
-              <div className="text-base font-bold">MutoPOS</div>
-              <div className="text-xs text-muted-foreground">
+    <view className="mp-login">
+      <Card className="mp-login__card">
+        <CardHeader
+          title="Sign in"
+          description="Enter your phone in E.164 format (e.g. +6281234567890)."
+        >
+          <view className="mp-login__brandrow">
+            <view className="mp-login__mark">
+              <Icon name="smartphone" size={20} color="#fcfcfd" />
+            </view>
+            <view>
+              <text className="mp-login__brand">MutoPOS</text>
+              <text className="mp-login__brand-sub">
                 Sign in with phone OTP
-              </div>
-            </div>
-          </div>
-          <CardTitle className="text-lg">Sign in</CardTitle>
-          <CardDescription>
-            Enter your phone in E.164 format (e.g. +6281234567890).
-          </CardDescription>
+              </text>
+            </view>
+          </view>
         </CardHeader>
-        <CardContent className="space-y-4 p-5 pt-0">
+        <CardContent>
           {step === 'phone' ? (
             <>
-              <div className="space-y-1.5">
-                <label className="text-sm font-semibold" htmlFor="phone">
-                  Phone (E.164)
-                </label>
-                <Input
-                  id="phone"
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                  placeholder="+6281234567890"
-                  autoComplete="tel"
-                  className="h-10"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <label className="text-sm font-semibold" htmlFor="name">
-                  Display name (optional)
-                </label>
-                <Input
-                  id="name"
-                  value={displayName}
-                  onChange={(e) => setDisplayName(e.target.value)}
-                  placeholder="Your name"
-                  className="h-10"
-                />
-              </div>
+              <TextField
+                label="Phone (E.164)"
+                value={phone}
+                onChangeText={setPhone}
+                placeholder="+6281234567890"
+                type="tel"
+              />
+              <TextField
+                label="Display name (optional)"
+                value={displayName}
+                onChangeText={setDisplayName}
+                placeholder="Your name"
+              />
               <Button
-                className="h-10 w-full font-semibold"
-                type="button"
+                block
+                label={busy ? 'Sending…' : 'Send OTP'}
                 disabled={busy || phone.length < 8}
-                onClick={() => void onRequest()}
-              >
-                {busy ? 'Sending…' : 'Send OTP'}
-              </Button>
+                onTap={() => void onRequest()}
+              />
             </>
           ) : (
             <>
-              <p className="text-sm text-muted-foreground">
-                Code sent to <strong className="text-foreground">{phone}</strong>
+              <text className="mp-login__note">
+                Code sent to {phone}
+                {devCode ? ' · stub ' : ''}
                 {devCode ? (
-                  <>
-                    {' '}
-                    · stub{' '}
-                    <code className="bg-muted px-1 font-semibold">{devCode}</code>
-                  </>
+                  <text className="mp-login__code">{devCode}</text>
                 ) : null}
-              </p>
-              <div className="space-y-1.5">
-                <label className="text-sm font-semibold" htmlFor="code">
-                  OTP code
-                </label>
-                <Input
-                  id="code"
-                  value={code}
-                  onChange={(e) => setCode(e.target.value)}
-                  placeholder="000000"
-                  inputMode="numeric"
-                  className="h-10 tracking-widest"
-                />
-              </div>
-              <div className="flex gap-2">
+              </text>
+              <TextField
+                label="OTP code"
+                value={code}
+                onChangeText={setCode}
+                placeholder="000000"
+                type="number"
+                maxLength={6}
+                onConfirm={() => void onVerify()}
+              />
+              <view className="mp-login__actions">
                 <Button
-                  type="button"
+                  className="mp-fill"
                   variant="outline"
-                  className="h-10 flex-1"
+                  label="Back"
                   disabled={busy}
-                  onClick={() => setStep('phone')}
-                >
-                  Back
-                </Button>
+                  onTap={() => setStep('phone')}
+                />
                 <Button
-                  type="button"
-                  className="h-10 flex-1 font-semibold"
+                  className="mp-fill"
+                  label={busy ? 'Verifying…' : 'Verify & enter'}
                   disabled={busy || !code}
-                  onClick={() => void onVerify()}
-                >
-                  {busy ? 'Verifying…' : 'Verify & enter'}
-                </Button>
-              </div>
+                  onTap={() => void onVerify()}
+                />
+              </view>
             </>
           )}
-          {error ? (
-            <p className="text-sm font-medium text-destructive" role="alert">
-              {error}
-            </p>
-          ) : null}
+          {error ? <text className="mp-error-text">{error}</text> : null}
         </CardContent>
       </Card>
-    </div>
+    </view>
   )
 }

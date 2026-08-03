@@ -9,6 +9,7 @@ import {
   TABLES,
   type OutboxDoc,
 } from '@/lib/db'
+import { isOnline, isTransportError, subscribeOnline } from '@/lib/net'
 
 export type OutboxStats = {
   pending: number
@@ -22,6 +23,7 @@ export type OutboxStats = {
 type Listener = (s: OutboxStats) => void
 
 let workerTimer: ReturnType<typeof setInterval> | null = null
+let onlineUnsub: (() => void) | null = null
 let running = false
 let lastError: string | undefined
 let lastSyncAt: number | undefined
@@ -29,6 +31,7 @@ const listeners = new Set<Listener>()
 let tableUnsub: (() => void) | null = null
 
 export function subscribeOutbox(fn: Listener): () => void {
+  'background only'
   listeners.add(fn)
   void emitStats()
   // Reactivity: re-emit when outbox table changes (TinyBase listener).
@@ -43,11 +46,13 @@ export function subscribeOutbox(fn: Listener): () => void {
 }
 
 async function emitStats() {
+  'background only'
   const stats = await getOutboxStats()
   for (const fn of listeners) fn(stats)
 }
 
 export async function getOutboxStats(): Promise<OutboxStats> {
+  'background only'
   try {
     const all = await listOutboxDocs()
     const pending = all.filter((d) => d.status === 'pending').length
@@ -59,7 +64,7 @@ export async function getOutboxStats(): Promise<OutboxStats> {
       inFlight,
       lastSyncAt,
       lastError,
-      online: typeof navigator === 'undefined' ? true : navigator.onLine,
+      online: isOnline(),
     }
   } catch {
     return {
@@ -68,42 +73,44 @@ export async function getOutboxStats(): Promise<OutboxStats> {
       inFlight: 0,
       lastError,
       lastSyncAt,
-      online: typeof navigator === 'undefined' ? true : navigator.onLine,
+      online: isOnline(),
     }
   }
 }
 
 export function startOutboxWorker(getTenant: () => TenantHeaders | null) {
+  'background only'
   if (workerTimer) return
   const tick = () => {
     void flushOutbox(getTenant)
   }
-  // Seamless background sync — no manual Sync button needed
+  // Seamless background sync — no manual Sync button needed.
   workerTimer = setInterval(tick, 1500)
-  if (typeof window !== 'undefined') {
-    window.addEventListener('online', tick)
-    document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'visible') tick()
-    })
-  }
+  // There is no `window` 'online' event in Lynx; connectivity is inferred from
+  // API traffic, so flush as soon as reachability comes back.
+  onlineUnsub = subscribeOnline((online) => {
+    if (online) tick()
+  })
   tick()
 }
 
 export function stopOutboxWorker() {
+  'background only'
   if (workerTimer) {
     clearInterval(workerTimer)
     workerTimer = null
+  }
+  if (onlineUnsub) {
+    onlineUnsub()
+    onlineUnsub = null
   }
 }
 
 export async function flushOutbox(
   getTenant: () => TenantHeaders | null,
 ): Promise<void> {
+  'background only'
   if (running) return
-  if (typeof navigator !== 'undefined' && !navigator.onLine) {
-    await emitStats()
-    return
-  }
   const tenant = getTenant()
   if (!tenant?.token || !tenant.businessId) {
     await emitStats()
@@ -113,6 +120,14 @@ export async function flushOutbox(
   running = true
   try {
     const pending = await listPendingOutbox(tenant.businessId)
+
+    if (pending.length === 0) {
+      // Nothing to push, so nothing would otherwise touch the network — probe
+      // so the shell's Online badge recovers once the API comes back.
+      if (!isOnline()) await api.health()
+      await emitStats()
+      return
+    }
 
     for (const data of pending) {
       if (data.attempts >= 8 && data.status === 'failed') continue
@@ -138,7 +153,11 @@ export async function flushOutbox(
             resultJson: JSON.stringify(res.result ?? res),
           })
           // mark local sale synced if sale.complete
-          if (data.type === 'sale.complete' && payload && typeof payload === 'object') {
+          if (
+            data.type === 'sale.complete' &&
+            payload &&
+            typeof payload === 'object'
+          ) {
             const p = payload as { client_sale_id?: string }
             if (p.client_sale_id) {
               const sale = await findLocalSaleByClientId(p.client_sale_id)
@@ -176,12 +195,14 @@ export async function flushOutbox(
           e && typeof e === 'object' && 'status' in e
             ? Number((e as { status: number }).status)
             : 0
-        // 4xx permanent domain errors → failed; network/5xx → pending retry
+        // 4xx permanent domain errors → failed; network/5xx → pending retry.
         await patchOutbox(data.id, {
           status: status >= 400 && status < 500 ? 'failed' : 'pending',
           lastError: msg,
         })
         lastError = msg
+        // The API is unreachable — stop hammering it until the next tick.
+        if (isTransportError(e)) break
       }
       await emitStats()
     }
