@@ -22,6 +22,14 @@ export default defineConfig({
       __API_BASE__: JSON.stringify(API_BASE.replace(/\/+$/, '')),
     },
   },
+  environments: {
+    lynx: {},
+    web: {},
+  },
+  server: {
+    host: '0.0.0.0',
+    port: 3001,
+  },
   plugins: [
     pluginQRCode({
       schema(url) {
