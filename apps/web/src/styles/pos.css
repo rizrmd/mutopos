@@ -789,7 +789,7 @@
   background-color: var(--pastel-2);
 }
 
-/* ---------- login ---------- */
+/* ---------- login (mobile-first OTP sign-in) ---------- */
 
 .mp-login {
   display: flex;
@@ -798,56 +798,168 @@
   justify-content: center;
   width: 100%;
   height: 100%;
-  padding: 16px;
+  min-height: 100%;
+  padding: 24px 20px 32px 20px;
   background-color: var(--background);
 }
 
-.mp-login__card {
+.mp-login__inner {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
   width: 100%;
-  max-width: 420px;
+  max-width: 400px;
+  gap: 20px;
 }
 
-.mp-login__brandrow {
+/* Centered brand block — mark, wordmark, tagline stack vertically */
+.mp-login__hero {
   display: flex;
-  flex-direction: row;
+  flex-direction: column;
   align-items: center;
-  gap: 12px;
-  margin-bottom: 8px;
+  gap: 8px;
+  padding: 8px 0 4px 0;
 }
 
 .mp-login__mark {
   display: flex;
+  flex-direction: row;
   align-items: center;
   justify-content: center;
-  width: 40px;
-  height: 40px;
+  width: 56px;
+  height: 56px;
+  margin-bottom: 4px;
   background-color: var(--primary);
+  border-radius: 14px;
+}
+
+.mp-login__mark-letter {
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -0.5px;
+  color: var(--primary-foreground);
 }
 
 .mp-login__brand {
-  font-size: 16px;
+  font-size: 22px;
   font-weight: 700;
+  letter-spacing: -0.4px;
+  line-height: 28px;
+  text-align: center;
   color: var(--foreground);
 }
 
-.mp-login__brand-sub {
-  font-size: 12px;
+.mp-login__tagline {
+  font-size: 13px;
+  line-height: 18px;
+  text-align: center;
   color: var(--muted-foreground);
 }
 
-.mp-login__note {
-  font-size: 14px;
-  color: var(--muted-foreground);
+/* Form card */
+.mp-login__card {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  background-color: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  overflow: hidden;
 }
 
-.mp-login__code {
-  font-size: 14px;
-  font-weight: 600;
+.mp-login__card-head {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 20px 20px 0 20px;
+}
+
+.mp-login__step-title {
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: -0.2px;
+  line-height: 24px;
   color: var(--foreground);
+}
+
+.mp-login__step-desc {
+  font-size: 13px;
+  line-height: 19px;
+  color: var(--muted-foreground);
+}
+
+.mp-login__card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px 20px 20px 20px;
+}
+
+.mp-login__cta {
+  display: flex;
+  flex-direction: column;
+  margin-top: 4px;
 }
 
 .mp-login__actions {
   display: flex;
   flex-direction: row;
-  gap: 8px;
+  align-items: stretch;
+  gap: 10px;
+  width: 100%;
+}
+
+/* Dev OTP stub callout */
+.mp-login__dev-code {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  background-color: var(--success-bg);
+  border: 1px solid var(--success-line);
+  border-radius: 12px;
+}
+
+.mp-login__dev-code-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+
+.mp-login__dev-code-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  color: var(--success-fg);
+}
+
+.mp-login__dev-code-value {
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  color: var(--success-fg);
+}
+
+.mp-login__error {
+  padding: 10px 12px;
+  background-color: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 10px;
+}
+
+.mp-login__error-text {
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 18px;
+  color: var(--destructive);
+}
+
+.mp-login__footnote {
+  font-size: 12px;
+  line-height: 16px;
+  text-align: center;
+  color: var(--muted-foreground);
 }
