@@ -17,6 +17,28 @@ npm run preview
 
 Scan the QR code with **LynxExplorer** (iOS/Android) to load the bundle.
 
+### Sandbox dev server (rizky-mutopos.fural.space)
+
+The sandbox reverse proxy targets this app's dev server on **port 3005**, so
+the port is pinned in `lynx.config.ts` with `strictPort: true`: if 3005 is
+taken, `rspeedy dev` fails loudly instead of silently moving to the next port
+(which leaves the proxy pointing at a dead backend → HTTP 502). If startup
+fails with "Port 3005 is occupied", kill the stale process holding it rather
+than changing the port.
+
+Inside the Fural sandbox the server should be started detached so it outlives
+the agent session (the sandbox runs musl, so the gcompat loader path is needed
+for `@lynx-js/tasm` — see toolchain note):
+
+```bash
+cd apps/web
+LD_LIBRARY_PATH=$HOME/.local/gcompat/lib:$HOME/.local/gcompat/lib64 \
+  setsid nohup npm run dev > $HOME/.local/logs/lynxjs-dev.log 2>&1 < /dev/null &
+```
+
+Open `https://rizky-mutopos.fural.space/` — the root redirects to the web
+preview (`/__web_preview?casename=main.web.bundle`).
+
 ### API origin
 
 A Lynx bundle has no page origin, so the old `/api` Vite dev proxy cannot work
@@ -31,8 +53,17 @@ Wi-Fi). The value is inlined at build time as `__API_BASE__` through
 `source.define` in `lynx.config.ts`.
 
 > **Toolchain note:** `@lynx-js/tasm` (the bundle encoder) ships glibc-only
-> native prebuilds, so `rspeedy build` does not run on musl distros such as
-> Alpine. Use a glibc Linux or macOS toolchain.
+> native prebuilds, so on musl distros (Alpine, the Fural sandbox) loading
+> `lepus.node` fails with `ld-linux-x86-64.so.2: No such file or directory`.
+> Either use a glibc Linux / macOS toolchain, or run under
+> [gcompat](https://git.adelielinux.org/adelie/gcompat) installed in `$HOME`:
+>
+> ```bash
+> LD_LIBRARY_PATH=$HOME/.local/gcompat/lib:$HOME/.local/gcompat/lib64 npm run dev
+> ```
+>
+> The sandbox installs gcompat at `$HOME/.local/gcompat` via the organization
+> runtime setup.
 
 ## Screens
 
