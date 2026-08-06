@@ -42,6 +42,14 @@ white page). The shell proxies `/v1`, `/healthz`, and `/readyz` to the Go API
 (`MUTOPOS_API_UPSTREAM`, default `http://127.0.0.1:8080`) so the browser can
 call the API same-origin over HTTPS.
 
+The shell and every `/__web_preview` asset (workers, WASM) are served with
+`Cross-Origin-Opener-Policy: same-origin`, `Cross-Origin-Embedder-Policy:
+require-corp`, and `Cross-Origin-Resource-Policy: same-origin` so the Lynx
+web runtime can use SharedArrayBuffer / module workers. If the POS UI fails
+to start, the boot screen shows isolation diagnostics (`crossOriginIsolated`,
+worker errors) — hard-reload (Ctrl+Shift+R) after a deploy if an older
+response without CORP was cached.
+
 ### API origin
 
 A Lynx bundle has no browser page origin by default, so the old Vite `/api`

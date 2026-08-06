@@ -1,5 +1,8 @@
-import { fileURLToPath } from 'node:url'
+import fs from 'node:fs'
 import http from 'node:http'
+import path from 'node:path'
+import { createRequire } from 'node:module'
+import { fileURLToPath } from 'node:url'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 
 import { pluginQRCode } from '@lynx-js/qrcode-rsbuild-plugin'
@@ -21,6 +24,113 @@ const API_BASE = (process.env['MUTOPOS_API_BASE'] ?? '').replace(/\/+$/, '')
 const API_UPSTREAM =
   process.env['MUTOPOS_API_UPSTREAM'] ?? 'http://127.0.0.1:8080'
 
+/** Stock Lynx web-explorer static tree (wasm, workers, lynx-view host). */
+const WEB_PREVIEW_ROOT = (() => {
+  const require = createRequire(import.meta.url)
+  const pkg = require.resolve('@lynx-js/web-rsbuild-server-middleware')
+  return path.join(path.dirname(pkg), '..', 'www')
+})()
+
+const WEB_PREVIEW_PREFIX = '/__web_preview'
+const fileCache = new Map<string, string | Buffer>()
+
+function isolationHeaders(res: ServerResponse): void {
+  // SharedArrayBuffer + module workers need cross-origin isolation.
+  res.setHeader('Cross-Origin-Opener-Policy', 'same-origin')
+  res.setHeader('Cross-Origin-Embedder-Policy', 'require-corp')
+  // Lynx's stock middleware omits CORP; under COEP some browsers/workers are
+  // strict about same-origin fetches. Always assert CORP ourselves.
+  res.setHeader('Cross-Origin-Resource-Policy', 'same-origin')
+}
+
+function contentTypeFor(ext: string): string {
+  switch (ext) {
+    case '.js':
+      return 'application/javascript; charset=utf-8'
+    case '.css':
+      return 'text/css; charset=utf-8'
+    case '.html':
+      return 'text/html; charset=utf-8'
+    case '.wasm':
+      return 'application/wasm'
+    case '.json':
+      return 'application/json'
+    case '.map':
+      return 'application/json'
+    default:
+      return 'application/octet-stream'
+  }
+}
+
+/**
+ * Serve `/__web_preview/*` with full isolation headers.
+ *
+ * Rspeedy registers `@lynx-js/web-rsbuild-server-middleware` on the Connect
+ * stack without CORP. We short-circuit those routes so every worker / wasm
+ * response carries COOP + COEP + CORP.
+ */
+function tryServeWebPreview(
+  req: IncomingMessage,
+  res: ServerResponse,
+): boolean {
+  const raw = req.url ?? ''
+  const pathOnly = (raw.split('?')[0] ?? '').replace(/\/+$/, '') || '/'
+  if (
+    pathOnly !== WEB_PREVIEW_PREFIX &&
+    !pathOnly.startsWith(`${WEB_PREVIEW_PREFIX}/`)
+  ) {
+    return false
+  }
+
+  let relative =
+    pathOnly === WEB_PREVIEW_PREFIX
+      ? 'index.html'
+      : pathOnly.slice(WEB_PREVIEW_PREFIX.length + 1)
+  if (!relative || relative.endsWith('/')) {
+    relative = `${relative}index.html`
+  }
+  // Prevent path escape outside www.
+  const filePath = path.normalize(path.join(WEB_PREVIEW_ROOT, relative))
+  if (
+    !filePath.startsWith(WEB_PREVIEW_ROOT + path.sep) &&
+    filePath !== WEB_PREVIEW_ROOT
+  ) {
+    res.statusCode = 403
+    res.end('forbidden')
+    return true
+  }
+
+  try {
+    const ext = path.extname(filePath)
+    let content = fileCache.get(filePath)
+    if (content === undefined) {
+      content =
+        ext === '.wasm'
+          ? fs.readFileSync(filePath)
+          : fs.readFileSync(filePath, 'utf-8')
+      if (typeof content === 'string') {
+        // Same rewrite the stock middleware applies so chunk publicPath works.
+        content = content.replaceAll(
+          'http://lynx-web-core-mocked.localhost/',
+          `${WEB_PREVIEW_PREFIX}/`,
+        )
+      }
+      fileCache.set(filePath, content)
+    }
+
+    res.statusCode = 200
+    res.setHeader('Content-Type', contentTypeFor(ext))
+    res.setHeader('Content-Length', Buffer.byteLength(content))
+    isolationHeaders(res)
+    // Avoid Cloudflare/browser caching a CORP-less variant of workers/wasm.
+    res.setHeader('Cache-Control', 'no-cache')
+    res.end(content)
+    return true
+  } catch {
+    return false
+  }
+}
+
 /**
  * Custom root document for the sandbox domain.
  *
@@ -28,8 +138,8 @@ const API_UPSTREAM =
  * finishes loading (`display: none` by default). When decode/WASM fails the
  * user only ever sees blank white. This shell:
  *   1. paints a visible boot UI immediately
- *   2. loads web-core and mounts lynx-view with an absolute bundle URL
- *   3. surfaces load errors instead of staying silent
+ *   2. loads web-core and mounts a fresh lynx-view with an absolute bundle URL
+ *   3. surfaces load / isolation / worker errors instead of staying silent
  *   4. injects `mutoposApiBase` so the client can call the same-origin API
  */
 const ROOT_HTML = `<!DOCTYPE html>
@@ -73,7 +183,7 @@ const ROOT_HTML = `<!DOCTYPE html>
     #boot .text { font-size: 13px; color: #6a7385; }
     #boot .err {
       pointer-events: auto;
-      max-width: 28rem;
+      max-width: 32rem;
       margin-top: 12px;
       padding: 12px 14px;
       background: #fff;
@@ -94,12 +204,44 @@ const ROOT_HTML = `<!DOCTYPE html>
   </style>
   <link href="/__web_preview/static/css/index.css" rel="stylesheet" />
   <script type="module">
-    import '/__web_preview/static/js/index.js';
+    // Surface worker / chunk failures the stock host swallows.
+    const bootIssues = [];
+    const OrigWorker = globalThis.Worker;
+    if (typeof OrigWorker === 'function') {
+      globalThis.Worker = class extends OrigWorker {
+        constructor(scriptURL, options) {
+          super(scriptURL, options);
+          this.addEventListener('error', (ev) => {
+            const msg = 'Worker failed: ' + (scriptURL && scriptURL.toString ? scriptURL.toString() : scriptURL) +
+              (ev.message ? ' — ' + ev.message : '');
+            console.error('[mutopos]', msg, ev);
+            bootIssues.push(msg);
+          });
+        }
+      };
+    }
+
+    window.addEventListener('unhandledrejection', (ev) => {
+      const reason = ev.reason;
+      const msg = reason && reason.message ? reason.message : String(reason);
+      console.error('[mutopos] unhandledrejection', reason);
+      bootIssues.push(msg);
+    });
+
+    try {
+      await import('/__web_preview/static/js/index.js');
+    } catch (e) {
+      const msg = e && e.message ? e.message : String(e);
+      bootIssues.push('Failed to load Lynx web runtime: ' + msg);
+      console.error('[mutopos] web-core import failed', e);
+    }
 
     const boot = document.getElementById('boot');
     const errEl = document.getElementById('boot-err');
+    let settled = false;
 
     function showError(msg) {
+      if (settled) return;
       if (errEl) {
         errEl.hidden = false;
         errEl.textContent = msg;
@@ -109,54 +251,122 @@ const ROOT_HTML = `<!DOCTYPE html>
     }
 
     function hideBoot() {
+      if (settled) return;
+      settled = true;
       if (boot) boot.style.display = 'none';
     }
 
-    // Stock explorer auto-mounts lynx-view from ?casename=… and also when
-    // missing. We always force an absolute bundle URL + API base.
-    function mount() {
-      let view = document.querySelector('lynx-view');
-      if (!view) {
-        view = document.createElement('lynx-view');
-        document.body.appendChild(view);
+    function shadowReady(view) {
+      const root = view && view.shadowRoot;
+      if (!root) return false;
+      if (root.querySelector('[part="page"]')) return true;
+      // Some builds mark the page via lynx-tag before part is applied.
+      if (root.querySelector('[lynx-tag="page"]')) return true;
+      // Any non-link content in the shadow root means the host painted.
+      for (const el of root.children) {
+        if (el.tagName !== 'LINK' && el.tagName !== 'STYLE') return true;
       }
+      return false;
+    }
+
+    function diagnostics(view) {
+      const lines = [];
+      lines.push('crossOriginIsolated=' + String(window.crossOriginIsolated));
+      lines.push('Worker=' + (typeof Worker === 'function' ? 'yes' : 'no'));
+      lines.push('WebAssembly=' + (typeof WebAssembly === 'object' ? 'yes' : 'no'));
+      if (view) {
+        lines.push('url=' + (view.url || '(none)'));
+        lines.push('shadow=' + (view.shadowRoot ? 'open' : 'missing'));
+        if (view.shadowRoot) {
+          const kids = [...view.shadowRoot.children].map((c) => c.tagName).join(',');
+          lines.push('shadowChildren=' + (kids || '(empty)'));
+        }
+      }
+      if (bootIssues.length) {
+        lines.push('issues: ' + bootIssues.slice(0, 4).join(' | '));
+      }
+      if (!window.crossOriginIsolated) {
+        lines.push(
+          'Cross-origin isolation is off — SharedArrayBuffer / Lynx workers cannot start. Hard-reload (Ctrl+Shift+R).',
+        );
+      }
+      return lines.join('\\n');
+    }
+
+    async function mount() {
+      try {
+        if (customElements.get('lynx-view') === undefined) {
+          await customElements.whenDefined('lynx-view');
+        }
+      } catch (e) {
+        showError('Lynx custom element never registered.\\n' + diagnostics(null));
+        return;
+      }
+
+      // Drop the stock explorer's empty auto-created lynx-view so we control
+      // globalProps + url before the first render.
+      for (const el of document.querySelectorAll('lynx-view')) {
+        el.remove();
+      }
+
+      const view = document.createElement('lynx-view');
       view.style.cssText = 'width:100vw;height:100vh;display:flex;';
       try {
-        view.globalProps = {
-          ...(view.globalProps || {}),
-          mutoposApiBase: location.origin,
-        };
+        view.globalProps = { mutoposApiBase: location.origin };
       } catch (e) {
         console.warn('[mutopos] globalProps failed', e);
       }
+
       view.addEventListener('error', (ev) => {
         const d = ev.detail || {};
-        showError(d.error?.message || d.statusMessage || 'Lynx runtime error');
+        const msg =
+          (d.error && d.error.message) ||
+          d.statusMessage ||
+          d.message ||
+          'Lynx runtime error';
+        showError(msg + '\\n' + diagnostics(view));
       });
       view.addEventListener('load', () => hideBoot());
-      // Absolute path — relative "main.web.bundle" is fragile behind proxies.
-      const url = '/main.web.bundle';
-      if (view.url !== url) view.url = url;
-      // If first frame never arrives, surface a timeout instead of infinite blank.
-      setTimeout(() => {
-        if (boot && boot.style.display !== 'none') {
-          const shadowHasPage = !!(view.shadowRoot && view.shadowRoot.querySelector('[part="page"]'));
-          if (!shadowHasPage) {
+
+      document.body.appendChild(view);
+
+      // Absolute URL — relative "main.web.bundle" breaks behind some proxies.
+      const url = new URL('/main.web.bundle', location.href).href;
+      view.url = url;
+
+      // Prefetch so the decode worker is less likely to race a cold cache.
+      try {
+        fetch(url, { headers: { Accept: 'application/octet-stream' } }).catch(() => {});
+      } catch (_) { /* ignore */ }
+
+      const started = Date.now();
+      const timer = setInterval(() => {
+        if (settled) {
+          clearInterval(timer);
+          return;
+        }
+        if (shadowReady(view)) {
+          hideBoot();
+          clearInterval(timer);
+          return;
+        }
+        if (Date.now() - started > 20000) {
+          clearInterval(timer);
+          if (!settled) {
             showError(
-              'Timed out waiting for the POS UI. Check the console for WASM/worker errors, then reload.',
+              'Timed out waiting for the POS UI.\\n' +
+                diagnostics(view) +
+                '\\nCheck the console for WASM/worker errors, then hard-reload.',
             );
-          } else {
-            hideBoot();
           }
         }
-      }, 15000);
+      }, 250);
     }
 
     if (document.readyState === 'loading') {
-      document.addEventListener('DOMContentLoaded', mount);
+      document.addEventListener('DOMContentLoaded', () => { void mount(); });
     } else {
-      // Explorer module runs w() at import time; give it a tick then re-assert.
-      queueMicrotask(mount);
+      void mount();
     }
   </script>
 </head>
@@ -217,6 +427,99 @@ function proxyToApi(
   req.pipe(upstream)
 }
 
+type ConnectMiddleware = (
+  req: IncomingMessage,
+  res: ServerResponse,
+  next: (err?: unknown) => void,
+) => void
+
+/** Shared request handler for root shell, preview assets, and API proxy. */
+const sandboxRequestHandler: ConnectMiddleware = (req, res, next) => {
+  const raw = req.url ?? ''
+  let pathOnly = raw.split('?')[0] ?? ''
+  // Some proxies forward absolute URLs.
+  if (pathOnly.startsWith('http://') || pathOnly.startsWith('https://')) {
+    try {
+      pathOnly = new URL(pathOnly).pathname
+    } catch {
+      /* keep raw path */
+    }
+  }
+  if (pathOnly.startsWith('//')) {
+    pathOnly = pathOnly.slice(1)
+  }
+
+  // Root → custom shell (not stock blank __web_preview).
+  if (pathOnly === '/' || pathOnly === '') {
+    const body = ROOT_HTML
+    res.statusCode = 200
+    res.setHeader('Content-Type', 'text/html; charset=utf-8')
+    res.setHeader('Content-Length', Buffer.byteLength(body))
+    isolationHeaders(res)
+    res.end(body)
+    return
+  }
+
+  // Dev diagnostics for shell isolation (safe to leave; no secrets).
+  if (pathOnly === '/__mutopos_debug') {
+    const sample = path.join(
+      WEB_PREVIEW_ROOT,
+      'static/wasm/4c5aa2efc5.module.wasm',
+    )
+    const body = JSON.stringify(
+      {
+        webPreviewRoot: WEB_PREVIEW_ROOT,
+        rootExists: fs.existsSync(WEB_PREVIEW_ROOT),
+        sampleWasm: sample,
+        sampleExists: fs.existsSync(sample),
+        cacheSize: fileCache.size,
+      },
+      null,
+      2,
+    )
+    res.statusCode = 200
+    res.setHeader('Content-Type', 'application/json')
+    isolationHeaders(res)
+    res.end(body)
+    return
+  }
+
+  // Own the Lynx web host assets so CORP is never missing.
+  // Clone req with normalized url for the file server.
+  if (
+    pathOnly === WEB_PREVIEW_PREFIX ||
+    pathOnly.startsWith(`${WEB_PREVIEW_PREFIX}/`)
+  ) {
+    const fakeReq = Object.create(req) as IncomingMessage
+    fakeReq.url = pathOnly + (raw.includes('?') ? raw.slice(raw.indexOf('?')) : '')
+    if (tryServeWebPreview(fakeReq, res)) {
+      return
+    }
+  }
+
+  // Fallback proxy if rsbuild proxy misses (some paths / methods).
+  if (
+    pathOnly === '/healthz' ||
+    pathOnly === '/readyz' ||
+    pathOnly.startsWith('/v1/')
+  ) {
+    proxyToApi(req, res, API_UPSTREAM)
+    return
+  }
+
+  // Bundle also needs isolation-friendly CORP.
+  if (
+    pathOnly === '/main.web.bundle' ||
+    pathOnly === '/main.lynx.bundle' ||
+    pathOnly.endsWith('.web.bundle') ||
+    pathOnly.endsWith('.lynx.bundle')
+  ) {
+    res.setHeader('Cross-Origin-Resource-Policy', 'same-origin')
+  }
+
+  next()
+}
+
 /**
  * Sandbox web shell + same-origin API proxy + CORP headers for COEP.
  */
@@ -234,6 +537,13 @@ const sandboxWebShell: RsbuildPlugin = {
         '/healthz': { target: API_UPSTREAM, changeOrigin: true },
         '/readyz': { target: API_UPSTREAM, changeOrigin: true },
       }
+      // Default isolation headers for rsbuild-served assets (bundle, HMR, …).
+      server.headers = {
+        ...(typeof server.headers === 'object' && server.headers
+          ? server.headers
+          : {}),
+        'Cross-Origin-Resource-Policy': 'same-origin',
+      }
 
       const dev = (config.dev ??= {})
       const existing = dev.setupMiddlewares
@@ -244,45 +554,37 @@ const sandboxWebShell: RsbuildPlugin = {
             ? existing
             : [existing]),
         middlewares => {
-          // CORP on every response so COEP: require-corp (set by web-core
-          // static middleware) can load the bundle / workers reliably.
+          // CORP on every response that still goes through this stack.
           middlewares.unshift((req, res, next) => {
             res.setHeader('Cross-Origin-Resource-Policy', 'same-origin')
             next()
           })
-
-          middlewares.unshift((req, res, next) => {
-            const raw = req.url ?? ''
-            const pathOnly = raw.split('?')[0] ?? ''
-
-            // Root → custom shell (not stock blank __web_preview).
-            if (pathOnly === '/' || pathOnly === '') {
-              const body = ROOT_HTML
-              res.statusCode = 200
-              res.setHeader('Content-Type', 'text/html; charset=utf-8')
-              res.setHeader('Content-Length', Buffer.byteLength(body))
-              // Match web-core isolation so SharedArrayBuffer / module workers work.
-              res.setHeader('Cross-Origin-Opener-Policy', 'same-origin')
-              res.setHeader('Cross-Origin-Embedder-Policy', 'require-corp')
-              res.setHeader('Cross-Origin-Resource-Policy', 'same-origin')
-              res.end(body)
-              return
-            }
-
-            // Fallback proxy if rsbuild proxy misses (some paths / methods).
-            if (
-              pathOnly === '/healthz' ||
-              pathOnly === '/readyz' ||
-              pathOnly.startsWith('/v1/')
-            ) {
-              proxyToApi(req, res, API_UPSTREAM)
-              return
-            }
-
-            next()
-          })
+          middlewares.unshift(sandboxRequestHandler)
         },
       ]
+    })
+
+    // Rspeedy registers the stock web-preview middleware via
+    // `server.middlewares.use(...)` in onBeforeStartDevServer — *after*
+    // setupMiddlewares in some versions, which can leave CORP off. Prepend
+    // our handler on the same Connect stack so we always win.
+    api.onBeforeStartDevServer(({ server }) => {
+      const app = server.middlewares as {
+        use: (fn: ConnectMiddleware) => void
+        stack?: Array<{ route: string; handle: ConnectMiddleware }>
+      }
+      if (Array.isArray(app.stack)) {
+        app.stack.unshift({ route: '', handle: sandboxRequestHandler })
+        app.stack.unshift({
+          route: '',
+          handle: (req, res, next) => {
+            res.setHeader('Cross-Origin-Resource-Policy', 'same-origin')
+            next()
+          },
+        })
+      } else {
+        app.use(sandboxRequestHandler)
+      }
     })
   },
 }
