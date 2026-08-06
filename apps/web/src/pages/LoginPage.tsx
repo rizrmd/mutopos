@@ -1,4 +1,4 @@
-import { useRef, useState } from '@lynx-js/react'
+import { useState } from '@lynx-js/react'
 import { useNavigate } from 'react-router'
 
 import { Button } from '@/components/ui/Button'
@@ -11,71 +11,11 @@ import {
   toNationalDigits,
 } from '@/lib/phone'
 import { useSession } from '@/lib/session'
-import { cn } from '@/lib/utils'
-
-/**
- * Phone row with a fixed +62 prefix. National digits live in state; free-form
- * paste/type (08… / 62… / +62…) is normalized via `toNationalDigits`.
- */
-function PhoneField({
-  national,
-  onChangeNational,
-}: {
-  national: string
-  onChangeNational: (value: string) => void
-}) {
-  const [focused, setFocused] = useState(false)
-  const lastReported = useRef(national)
-  const generation = useRef(0)
-
-  if (national !== lastReported.current) {
-    lastReported.current = national
-    generation.current += 1
-  }
-
-  return (
-    <view className="mp-field">
-      <text className="mp-field__label">Phone number</text>
-      <view className={cn('mp-phone', focused && 'is-focused')}>
-        <view className="mp-phone__prefix">
-          <text className="mp-phone__prefix-text">+62</text>
-        </view>
-        <input
-          key={`p${generation.current}`}
-          className="mp-phone__control"
-          default-value={national}
-          type="tel"
-          placeholder="81234567890"
-          bindinput={(e) => {
-            'background only'
-            const raw = e.detail.value
-            const next = toNationalDigits(raw)
-            // Keep lastReported as the raw field text so a cleaned national
-            // value from the parent remounts the input (Lynx default-value).
-            lastReported.current = raw
-            onChangeNational(next)
-          }}
-          bindfocus={() => {
-            'background only'
-            setFocused(true)
-          }}
-          bindblur={() => {
-            'background only'
-            setFocused(false)
-          }}
-        />
-      </view>
-      <text className="mp-phone__hint">
-        You can type 08…, 62…, or +62… — we’ll fix the format.
-      </text>
-    </view>
-  )
-}
 
 export function LoginPage() {
   const { requestOTP, loginWithOTP } = useSession()
   const navigate = useNavigate()
-  /** National digits only; UI shows a fixed +62 prefix. */
+  /** National digits only (no country code / leading 0). */
   const [national, setNational] = useState('')
   const [code, setCode] = useState('')
   const [devCode, setDevCode] = useState<string | undefined>()
@@ -145,9 +85,15 @@ export function LoginPage() {
           <view className="mp-login__card-body">
             {step === 'phone' ? (
               <>
-                <PhoneField
-                  national={national}
-                  onChangeNational={setNational}
+                <TextField
+                  label="Phone number"
+                  value={national}
+                  onChangeText={(raw) => setNational(toNationalDigits(raw))}
+                  placeholder="81234567890"
+                  type="tel"
+                  onConfirm={() => {
+                    if (!busy && isPlausibleIdPhone(national)) void onRequest()
+                  }}
                 />
                 <view className="mp-login__cta">
                   <Button

@@ -1,8 +1,8 @@
 /**
  * Indonesian phone helpers for login.
  *
- * Users type local (08…), country (62…), or international (+62…) forms.
- * The UI keeps a fixed +62 prefix and only the national digits in the field.
+ * Free-form input (08… / 62… / +62… / bare national) is normalized to national
+ * digits, then E.164 (+62…) for the API. The login field is a plain tel input.
  */
 
 /** Digits only, no leading +. */
