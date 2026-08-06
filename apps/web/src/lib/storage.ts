@@ -74,47 +74,69 @@ export function storageBackend(): StorageBackend {
   return backend
 }
 
+/** Hosts that never call the storage callback leave ready=false forever. */
+const STORAGE_TIMEOUT_MS = 1500
+
+function withTimeout<T>(
+  work: (done: (value: T) => void) => void,
+  fallback: T,
+  label: string,
+): Promise<T> {
+  return new Promise<T>((resolve) => {
+    let settled = false
+    const done = (v: T) => {
+      if (settled) return
+      settled = true
+      resolve(v)
+    }
+    const timer = setTimeout(() => {
+      console.warn(`[mutopos] ${label} timed out; using fallback`)
+      done(fallback)
+    }, STORAGE_TIMEOUT_MS)
+    try {
+      work((v) => {
+        clearTimeout(timer)
+        done(v)
+      })
+    } catch (err) {
+      clearTimeout(timer)
+      console.error(`[mutopos] ${label} failed`, err)
+      done(fallback)
+    }
+  })
+}
+
 export async function getItem(key: string): Promise<string | null> {
   'background only'
   switch (storageBackend()) {
     case 'native': {
       const mod = nativeModule()
       if (!mod?.getStorageItem) return null
-      return new Promise<string | null>((resolve) => {
-        let settled = false
-        const done = (v: unknown) => {
-          if (settled) return
-          settled = true
-          resolve(typeof v === 'string' ? v : null)
-        }
-        try {
+      return withTimeout<string | null>(
+        (done) => {
           // Some hosts return the value, others call back. Support both.
           const direct = mod.getStorageItem!(key, done)
-          if (direct !== undefined) done(direct)
-        } catch (err) {
-          console.error('[mutopos] getStorageItem failed', err)
-          done(null)
-        }
-      })
+          if (direct !== undefined) done(typeof direct === 'string' ? direct : null)
+        },
+        null,
+        'getStorageItem',
+      )
     }
     case 'session': {
       const l = sessionLynx()
       if (!l?.getSessionStorageItem) return null
-      return new Promise<string | null>((resolve) => {
-        let settled = false
-        const done = (v: unknown) => {
-          if (settled) return
-          settled = true
-          resolve(typeof v === 'string' ? v : null)
-        }
-        try {
-          const direct = l.getSessionStorageItem!(key, done)
-          if (direct !== undefined) done(direct)
-        } catch (err) {
-          console.error('[mutopos] getSessionStorageItem failed', err)
-          done(null)
-        }
-      })
+      return withTimeout<string | null>(
+        (done) => {
+          const direct = l.getSessionStorageItem!(key, (v) => {
+            done(typeof v === 'string' ? v : null)
+          })
+          if (direct !== undefined) {
+            done(typeof direct === 'string' ? direct : null)
+          }
+        },
+        null,
+        'getSessionStorageItem',
+      )
     }
     default:
       return memory.get(key) ?? null

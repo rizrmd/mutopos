@@ -36,21 +36,28 @@ LD_LIBRARY_PATH=$HOME/.local/gcompat/lib:$HOME/.local/gcompat/lib64 \
   setsid nohup npm run dev > $HOME/.local/logs/lynxjs-dev.log 2>&1 < /dev/null &
 ```
 
-Open `https://rizky-mutopos.fural.space/` — the root redirects to the web
-preview (`/__web_preview?casename=main.web.bundle`).
+Open `https://rizky-mutopos.fural.space/` — `/` serves a custom web shell that
+mounts `lynx-view` on `/main.web.bundle` (with a visible boot UI, not a blank
+white page). The shell proxies `/v1`, `/healthz`, and `/readyz` to the Go API
+(`MUTOPOS_API_UPSTREAM`, default `http://127.0.0.1:8080`) so the browser can
+call the API same-origin over HTTPS.
 
 ### API origin
 
-A Lynx bundle has no page origin, so the old `/api` Vite dev proxy cannot work
-— the API base must be an absolute origin reachable **from the device**:
+A Lynx bundle has no browser page origin by default, so the old Vite `/api`
+proxy cannot work alone. Resolution order:
+
+1. `MUTOPOS_API_BASE` at build time (absolute origin for LynxExplorer / phone)
+2. Web shell injects `globalProps.mutoposApiBase = location.origin` (sandbox)
+3. Fallback `http://127.0.0.1:8080` (local simulator)
 
 ```bash
+# Phone on Wi-Fi talking to your laptop's API:
 MUTOPOS_API_BASE=http://192.168.1.10:8080 npm run dev
-```
 
-It defaults to `http://127.0.0.1:8080` (fine for a simulator, not for a phone on
-Wi-Fi). The value is inlined at build time as `__API_BASE__` through
-`source.define` in `lynx.config.ts`.
+# Sandbox browser (default): leave MUTOPOS_API_BASE unset; shell + proxy.
+npm run dev
+```
 
 > **Toolchain note:** `@lynx-js/tasm` (the bundle encoder) ships glibc-only
 > native prebuilds, so on musl distros (Alpine, the Fural sandbox) loading

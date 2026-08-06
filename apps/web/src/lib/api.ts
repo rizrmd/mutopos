@@ -1,10 +1,37 @@
 import { markReachable, markUnreachable } from '@/lib/net'
 
 /**
- * Absolute API origin, injected by `source.define` in lynx.config.ts.
- * A Lynx bundle has no page origin, so relative `/api` paths cannot resolve.
+ * Absolute API origin.
+ *
+ * Priority:
+ * 1. `__API_BASE__` from `MUTOPOS_API_BASE` at build time (LynxExplorer / device)
+ * 2. `lynx.__globalProps.mutoposApiBase` injected by the web shell (`location.origin`)
+ * 3. Fallback `http://127.0.0.1:8080` for local simulators
+ *
+ * Empty build-time base + same-origin proxy is required for the sandbox domain:
+ * a browser on https://… cannot call http://127.0.0.1 (mixed content + wrong host).
  */
-const API_BASE = __API_BASE__
+function resolveApiBase(): string {
+  const baked = (typeof __API_BASE__ === 'string' ? __API_BASE__ : '').replace(
+    /\/+$/,
+    '',
+  )
+  if (baked) return baked
+  try {
+    const lynx = (
+      globalThis as unknown as {
+        lynx?: { __globalProps?: { mutoposApiBase?: string } }
+      }
+    ).lynx
+    const fromHost = lynx?.__globalProps?.mutoposApiBase
+    if (typeof fromHost === 'string' && fromHost) {
+      return fromHost.replace(/\/+$/, '')
+    }
+  } catch {
+    /* host has no globalProps yet */
+  }
+  return 'http://127.0.0.1:8080'
+}
 
 export type Membership = {
   business_id: string
@@ -132,7 +159,11 @@ async function request<T>(path: string, options?: RequestOptions): Promise<T> {
   'background only'
   let res: Response
   try {
-    res = await fetch(`${API_BASE}${path}`, {
+    const base = resolveApiBase()
+    const url = path.startsWith('http')
+      ? path
+      : `${base}${path.startsWith('/') ? path : `/${path}`}`
+    res = await fetch(url, {
       method: options?.method ?? 'GET',
       headers: options?.headers,
       body: options?.body,
