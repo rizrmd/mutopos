@@ -50,21 +50,61 @@ to start, the boot screen shows isolation diagnostics (`crossOriginIsolated`,
 worker errors) — hard-reload (Ctrl+Shift+R) after a deploy if an older
 response without CORP was cached.
 
+### Android on a phone (no shared LAN with Fural sandbox)
+
+The Fural sandbox lives on a remote host — the phone and the sandbox are
+**not** on the same Wi‑Fi. Do **not** use a `192.168.x.x` LAN IP.
+
+When `FURAL_SANDBOX_DOMAIN` is set (AgentSession / member sandbox), the
+dev server automatically:
+
+1. Rewrites the LynxExplorer **QR** to `https://$FURAL_SANDBOX_DOMAIN/...`
+2. Bakes **`MUTOPOS_API_BASE`** to that same public origin (API is proxied
+   through the rspeedy server on :3005 → Go :8080)
+3. Serves a helper page at `/__android` with the pasteable bundle URL
+
+```bash
+# In the Fural sandbox (API already on :8080):
+cd apps/web
+LD_LIBRARY_PATH=$HOME/.local/gcompat/lib:$HOME/.local/gcompat/lib64 npm run dev
+```
+
+Then on the phone:
+
+1. Install **LynxExplorer** once.
+2. Scan the terminal QR (**public** schema), **or** open  
+   `https://<your-sandbox>.fural.space/__android` and paste the bundle URL.
+3. UI edits rebuild via HMR — **no APK rebuild**.
+
+Override if needed:
+
+```bash
+MUTOPOS_PUBLIC_ORIGIN=https://rizky-mutopos.fural.space npm run dev
+```
+
+### Local laptop + phone on the same Wi‑Fi
+
+```bash
+# Phone on Wi-Fi talking to your laptop (LAN only — not the Fural sandbox):
+MUTOPOS_API_BASE=http://192.168.1.10:8080 npm run dev
+```
+
 ### API origin
 
 A Lynx bundle has no browser page origin by default, so the old Vite `/api`
 proxy cannot work alone. Resolution order:
 
 1. `MUTOPOS_API_BASE` at build time (absolute origin for LynxExplorer / phone)
-2. Web shell injects `globalProps.mutoposApiBase = location.origin` (sandbox)
-3. Fallback `http://127.0.0.1:8080` (local simulator)
+2. Else `MUTOPOS_PUBLIC_ORIGIN` / `https://$FURAL_SANDBOX_DOMAIN` (sandbox)
+3. Web shell injects `globalProps.mutoposApiBase = location.origin` (browser)
+4. Fallback `http://127.0.0.1:8080` (local simulator)
 
 ```bash
-# Phone on Wi-Fi talking to your laptop's API:
-MUTOPOS_API_BASE=http://192.168.1.10:8080 npm run dev
-
-# Sandbox browser (default): leave MUTOPOS_API_BASE unset; shell + proxy.
+# Sandbox browser or Android via public domain (auto when FURAL_SANDBOX_DOMAIN set):
 npm run dev
+
+# Laptop LAN phone:
+MUTOPOS_API_BASE=http://192.168.1.10:8080 npm run dev
 ```
 
 > **Toolchain note:** `@lynx-js/tasm` (the bundle encoder) ships glibc-only

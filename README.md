@@ -56,7 +56,9 @@ cp apps/api/.env.example apps/api/.env
 | `AUTO_MIGRATE` | `true` | Run SQL migrations on API start |
 | `SESSION_SECRET` | dev default | Salts session / OTP hashes |
 | `OTP_STUB_CODE` | `000000` | Fixed WhatsApp OTP for the stub (empty = still uses stub, logs code) |
-| `MUTOPOS_API_BASE` | `http://127.0.0.1:8080` | Absolute API origin baked into the Lynx bundle (must be reachable from the device) |
+| `MUTOPOS_API_BASE` | *(empty → public origin or localhost)* | Absolute API origin baked into the Lynx bundle (must be reachable from the device) |
+| `MUTOPOS_PUBLIC_ORIGIN` | `https://$FURAL_SANDBOX_DOMAIN` in sandbox | Public HTTPS origin for QR + default API when the phone cannot share LAN with the server |
+| `FURAL_SANDBOX_DOMAIN` | injected by Fural | e.g. `rizky-mutopos.fural.space` — used when `MUTOPOS_PUBLIC_ORIGIN` is unset |
 
 Sample:
 
@@ -129,13 +131,21 @@ Schema: [`apps/api/migrations/001_init.sql`](./apps/api/migrations/001_init.sql)
 ```bash
 cd apps/web
 npm install
-MUTOPOS_API_BASE=http://127.0.0.1:8080 npm run dev
+npm run dev
 ```
 
 Rspeedy prints a QR code — scan it with **LynxExplorer** (iOS/Android) to load
-the bundle. On a physical device use your machine's LAN address, e.g.
-`MUTOPOS_API_BASE=http://192.168.1.10:8080`: a Lynx bundle has no page origin,
-so the old `/api` dev proxy is not available and the API base must be absolute.
+the bundle.
+
+| Where you run `npm run dev` | How the phone reaches the bundle + API |
+|-----------------------------|----------------------------------------|
+| **Fural sandbox** (remote) | **No shared LAN.** QR + API use `https://$FURAL_SANDBOX_DOMAIN` (reverse proxy → :3005; API proxied to Go :8080). Helper: `/__android`. |
+| **Your laptop** + phone on same Wi‑Fi | Set `MUTOPOS_API_BASE=http://<LAN_IP>:8080` (or `:3005` if using the dev proxy). |
+| **Browser only** | Open the sandbox domain or `http://127.0.0.1:3005/` — web shell, not native Lynx. |
+
+A Lynx bundle has no page origin, so the API base must be absolute on device.
+In the sandbox this is automatic via `FURAL_SANDBOX_DOMAIN`; override with
+`MUTOPOS_PUBLIC_ORIGIN` / `MUTOPOS_API_BASE` if needed.
 
 Production build:
 

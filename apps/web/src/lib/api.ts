@@ -4,12 +4,14 @@ import { markReachable, markUnreachable } from '@/lib/net'
  * Absolute API origin.
  *
  * Priority:
- * 1. `__API_BASE__` from `MUTOPOS_API_BASE` at build time (LynxExplorer / device)
+ * 1. `__API_BASE__` from `MUTOPOS_API_BASE` or public sandbox origin at build time
+ *    (LynxExplorer / device — including Fural `https://$FURAL_SANDBOX_DOMAIN`)
  * 2. `lynx.__globalProps.mutoposApiBase` injected by the web shell (`location.origin`)
  * 3. Fallback `http://127.0.0.1:8080` for local simulators
  *
- * Empty build-time base + same-origin proxy is required for the sandbox domain:
- * a browser on https://… cannot call http://127.0.0.1 (mixed content + wrong host).
+ * Empty build-time base + same-origin proxy works for the browser shell; native
+ * LynxExplorer needs an absolute origin reachable from the phone (public HTTPS
+ * when the dev server is a remote Fural sandbox, LAN IP when on the same Wi‑Fi).
  */
 function resolveApiBase(): string {
   const baked = (typeof __API_BASE__ === 'string' ? __API_BASE__ : '').replace(

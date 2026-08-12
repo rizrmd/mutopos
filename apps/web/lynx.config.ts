@@ -10,19 +10,78 @@ import { pluginReactLynx } from '@lynx-js/react-rsbuild-plugin'
 import { defineConfig, type RsbuildPlugin } from '@lynx-js/rspeedy'
 
 /**
+ * Public HTTPS origin reachable from a physical phone when the dev server
+ * is NOT on the same LAN as the device (Fural sandbox on a remote host).
+ *
+ * Priority:
+ * 1. `MUTOPOS_PUBLIC_ORIGIN` (explicit override, e.g. https://example.com)
+ * 2. `https://$FURAL_SANDBOX_DOMAIN` when injected by the Fural sandbox
+ * 3. empty — local laptop / LAN workflows use interface IPs from Rspeedy
+ *
+ * When set, the QR schema rewrites the internal listen URL to this origin
+ * so LynxExplorer on Android can load the bundle over the public reverse
+ * proxy (*.fural.space → sandbox :3005). The same origin is also the
+ * default API base so native fetch hits the same-origin API proxy.
+ */
+const PUBLIC_ORIGIN = (() => {
+  const explicit = (process.env['MUTOPOS_PUBLIC_ORIGIN'] ?? '').replace(
+    /\/+$/,
+    '',
+  )
+  if (explicit) return explicit
+  const domain = (process.env['FURAL_SANDBOX_DOMAIN'] ?? '').trim()
+  if (domain) return `https://${domain.replace(/^https?:\/\//, '')}`
+  return ''
+})()
+
+/**
  * Absolute API origin baked into the Lynx bundle via `__API_BASE__`.
  *
- * - Empty string (default): same-origin — the web preview proxies `/v1`,
- *   `/healthz`, `/readyz` to the Go API. Correct for the sandbox domain
- *   (https://rizky-mutopos.fural.space) where `http://127.0.0.1:8080` would
- *   hit the visitor's machine and be blocked as mixed content.
- * - Set `MUTOPOS_API_BASE` for LynxExplorer on a phone (e.g.
- *   `http://192.168.1.10:8080`) — the device must reach that host.
+ * - Empty string: same-origin / host injection — web preview proxies `/v1`,
+ *   `/healthz`, `/readyz` to the Go API. Correct for browser on the sandbox
+ *   domain where `http://127.0.0.1:8080` would hit the visitor's machine.
+ * - `MUTOPOS_API_BASE` explicit (e.g. `http://192.168.1.10:8080` for LAN).
+ * - Else `PUBLIC_ORIGIN` when set (sandbox → Android path).
  */
-const API_BASE = (process.env['MUTOPOS_API_BASE'] ?? '').replace(/\/+$/, '')
+const API_BASE = (
+  process.env['MUTOPOS_API_BASE'] ??
+  PUBLIC_ORIGIN ??
+  ''
+).replace(/\/+$/, '')
 
 const API_UPSTREAM =
   process.env['MUTOPOS_API_UPSTREAM'] ?? 'http://127.0.0.1:8080'
+
+/** Rewrite a Rspeedy listen URL onto the public origin (path + query kept). */
+function toPublicUrl(url: string): string {
+  if (!PUBLIC_ORIGIN) return url
+  try {
+    const src = new URL(url)
+    const pub = new URL(PUBLIC_ORIGIN)
+    // Use hostname + port (not host) so the internal :3005 listen port is
+    // dropped — the public reverse proxy terminates TLS on 443 and forwards
+    // to sandbox :3005. Leaving :3005 on the QR would make phones hit a
+    // closed port on *.fural.space.
+    src.protocol = pub.protocol
+    src.hostname = pub.hostname
+    src.port = pub.port
+    return src.toString()
+  } catch {
+    return url
+  }
+}
+
+function withFullscreen(url: string): string {
+  try {
+    const u = new URL(url)
+    if (!u.searchParams.has('fullscreen')) {
+      u.searchParams.set('fullscreen', 'true')
+    }
+    return u.toString()
+  } catch {
+    return url.includes('?') ? `${url}&fullscreen=true` : `${url}?fullscreen=true`
+  }
+}
 
 /** Stock Lynx web-explorer static tree (wasm, workers, lynx-view host). */
 const WEB_PREVIEW_ROOT = (() => {
@@ -473,12 +532,66 @@ const sandboxRequestHandler: ConnectMiddleware = (req, res, next) => {
         sampleWasm: sample,
         sampleExists: fs.existsSync(sample),
         cacheSize: fileCache.size,
+        publicOrigin: PUBLIC_ORIGIN || null,
+        apiBase: API_BASE || null,
+        apiUpstream: API_UPSTREAM,
       },
       null,
       2,
     )
     res.statusCode = 200
     res.setHeader('Content-Type', 'application/json')
+    isolationHeaders(res)
+    res.end(body)
+    return
+  }
+
+  // Android / LynxExplorer helper: public bundle URL when LAN is impossible
+  // (Fural sandbox is remote). Open this page on a laptop or paste the URL
+  // into LynxExplorer manually if the terminal QR is hard to scan.
+  if (pathOnly === '/__android' || pathOnly === '/android') {
+    const origin =
+      PUBLIC_ORIGIN ||
+      (() => {
+        const host = req.headers['x-forwarded-host'] ?? req.headers.host
+        const proto =
+          (req.headers['x-forwarded-proto'] as string | undefined) ?? 'http'
+        return host ? `${proto}://${host}` : ''
+      })()
+    const bundle = origin
+      ? withFullscreen(new URL('/main.lynx.bundle', origin).href)
+      : '(set MUTOPOS_PUBLIC_ORIGIN or open via sandbox domain)'
+    const api = API_BASE || origin || '(same origin via proxy)'
+    const body = `<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>MutoPOS → LynxExplorer</title>
+<style>
+  body{font-family:system-ui,sans-serif;max-width:36rem;margin:2rem auto;padding:0 1rem;line-height:1.45;color:#212734}
+  code,pre{background:#f2f4f8;padding:.15rem .4rem;border-radius:4px;word-break:break-all}
+  pre{padding:12px;overflow:auto}
+  .hint{color:#6a7385;font-size:14px}
+  h1{font-size:1.25rem}
+</style>
+</head><body>
+<h1>Android preview (LynxExplorer)</h1>
+<p class="hint">Sandbox is remote — phone does <strong>not</strong> need the same Wi‑Fi as the server. Use the public HTTPS URL below.</p>
+<p><strong>Bundle URL</strong> (scan QR from <code>npm run dev</code>, or paste into LynxExplorer):</p>
+<pre id="u">${bundle.replace(/</g, '&lt;')}</pre>
+<p><strong>API base</strong> baked into the bundle:</p>
+<pre>${String(api).replace(/</g, '&lt;')}</pre>
+<ol>
+  <li>Install <strong>LynxExplorer</strong> once (official host APK).</li>
+  <li>Start API + <code>npm run dev</code> in the Fural sandbox (port 3005).</li>
+  <li>Scan the terminal QR, or open the bundle URL above in Explorer.</li>
+  <li>Web-only preview: open <code>/</code> on the sandbox domain (browser, not native).</li>
+</ol>
+<p class="hint">Debug JSON: <a href="/__mutopos_debug">/__mutopos_debug</a></p>
+</body></html>`
+    res.statusCode = 200
+    res.setHeader('Content-Type', 'text/html; charset=utf-8')
+    res.setHeader('Content-Length', Buffer.byteLength(body))
     isolationHeaders(res)
     res.end(body)
     return
@@ -585,6 +698,21 @@ const sandboxWebShell: RsbuildPlugin = {
       } else {
         app.use(sandboxRequestHandler)
       }
+
+      if (PUBLIC_ORIGIN) {
+        // eslint-disable-next-line no-console
+        console.log(
+          [
+            '',
+            '[mutopos] Public origin (Android / remote phone — no shared LAN needed):',
+            `  ${PUBLIC_ORIGIN}`,
+            `  API base: ${API_BASE || '(same origin)'}`,
+            `  LynxExplorer: ${withFullscreen(`${PUBLIC_ORIGIN}/main.lynx.bundle`)}`,
+            `  Helper page: ${PUBLIC_ORIGIN}/__android`,
+            '',
+          ].join('\n'),
+        )
+      }
     })
   },
 }
@@ -618,8 +746,19 @@ export default defineConfig({
     sandboxWebShell,
     pluginQRCode({
       schema(url) {
-        // `?fullscreen=true` opens the POS full screen in LynxExplorer.
-        return `${url}?fullscreen=true`
+        // Rewrite listen URL → public HTTPS when running in Fural sandbox
+        // so Android LynxExplorer can load the bundle without sharing LAN.
+        // Local laptop: PUBLIC_ORIGIN empty → keep Rspeedy's LAN IP URLs.
+        const target = withFullscreen(toPublicUrl(url))
+        if (PUBLIC_ORIGIN) {
+          return {
+            // Prefer public first (default QR) for phone-on-cellular / remote.
+            public: target,
+            // Keep raw listen URL for debugging inside the sandbox netns.
+            local: withFullscreen(url),
+          }
+        }
+        return target
       },
     }),
     pluginReactLynx({
